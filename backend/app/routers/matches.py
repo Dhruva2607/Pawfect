@@ -33,7 +33,7 @@ class DirectEvalRequest(BaseModel):
 class DirectEvalResponse(BaseModel):
     pet_id: str
     pet_name: str
-    compatibility_score: int
+    compatibility_score: int = Field(..., ge=0, le=100)
     pros: List[str]
     caveats: List[str]
     reasoning_summary: str
@@ -108,27 +108,6 @@ async def direct_eval(request: DirectEvalRequest):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": human_prompt}
         ])
-
-        # Persist to match_evaluations collection [FROM MARKDOWN: Step 1.1]
-        eval_record = MatchEvaluation(
-            session_id=request.session_id,
-            pet_id=pet.id,
-            compatibility_score=eval_result.compatibility_score,
-            pros=eval_result.pros,
-            caveats=eval_result.caveats,
-            reasoning_summary=eval_result.reasoning_summary
-        )
-        await db["match_evaluations"].insert_one(eval_record.model_dump(by_alias=True))
-
-        return DirectEvalResponse(
-            pet_id=pet.id,
-            pet_name=pet.name,
-            compatibility_score=eval_result.compatibility_score,
-            pros=eval_result.pros,
-            caveats=eval_result.caveats,
-            reasoning_summary=eval_result.reasoning_summary
-        )
-
     except Exception as e:
         logger.error("Direct evaluation LLM error: %s. Using heuristic fallback.", e)
         # Fallback scoring
@@ -141,7 +120,7 @@ async def direct_eval(request: DirectEvalRequest):
             score -= 25
 
         score = max(40, min(95, score))
-        return DirectEvalResponse(
+        eval_result = SinglePetCompatibility(
             pet_id=pet.id,
             pet_name=pet.name,
             compatibility_score=score,
@@ -150,3 +129,23 @@ async def direct_eval(request: DirectEvalRequest):
             reasoning_summary=f"{pet.name} is a wonderful {pet.breed} to consider for your home."
         )
 
+    eval_record = MatchEvaluation(
+        session_id=request.session_id,
+        pet_id=pet.id,
+        compatibility_score=eval_result.compatibility_score,
+        pros=eval_result.pros,
+        caveats=eval_result.caveats,
+        reasoning_summary=eval_result.reasoning_summary
+    )
+    await db["match_evaluations"].insert_one(
+        eval_record.model_dump(by_alias=True, exclude_none=True)
+    )
+
+    return DirectEvalResponse(
+        pet_id=pet.id,
+        pet_name=pet.name,
+        compatibility_score=eval_result.compatibility_score,
+        pros=eval_result.pros,
+        caveats=eval_result.caveats,
+        reasoning_summary=eval_result.reasoning_summary
+    )

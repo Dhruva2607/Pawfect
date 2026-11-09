@@ -2,6 +2,7 @@ package com.pawfect.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pawfect.app.data.local.SessionManager
 import com.pawfect.app.data.model.DirectEvalRequestDto
 import com.pawfect.app.data.model.DirectEvalResponseDto
 import com.pawfect.app.data.model.PetDto
@@ -23,7 +24,8 @@ data class CompatibilityUiState(
 
 @HiltViewModel
 class CompatibilityViewModel @Inject constructor(
-    private val petRepository: PetRepository
+    private val petRepository: PetRepository,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CompatibilityUiState())
@@ -34,15 +36,16 @@ class CompatibilityViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val pet = petRepository.getPet(petId)
+                val session = sessionManager.currentSession()
                 val eval = petRepository.directEval(
                     DirectEvalRequestDto(
-                        sessionId = "compat_session_$petId",
+                        sessionId = sessionManager.chatSessionId(),
                         petId = petId,
-                        housingType = "apartment",
-                        hasChildren = true,
-                        hasOtherPets = false,
-                        energyBudget = 3,
-                        notes = "Gentle family companion in cozy apartment"
+                        housingType = session?.housingType,
+                        hasChildren = session?.hasChildren,
+                        hasOtherPets = session?.hasOtherPets,
+                        energyBudget = session?.energyBudget,
+                        notes = null
                     )
                 )
                 _uiState.update {
@@ -53,9 +56,13 @@ class CompatibilityViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.localizedMessage ?: "Could not evaluate compatibility. Please try again."
+                    )
+                }
             }
         }
     }
 }
-

@@ -7,7 +7,7 @@ import logging
 from typing import Any, Dict
 from pymongo.database import Database
 from pymongo import ASCENDING
-from pymongo.errors import OperationFailure
+from pymongo.errors import PyMongoError
 from app.database.connection import get_sync_db
 
 logger = logging.getLogger(__name__)
@@ -33,11 +33,15 @@ ATLAS_VECTOR_SEARCH_INDEX_DEFINITION: Dict[str, Any] = {
             },
             {
                 "type": "filter",
-                "path": "energy_level"
+                "path": "good_with_other_pets"
             },
             {
                 "type": "filter",
                 "path": "good_with_kids"
+            },
+            {
+                "type": "filter",
+                "path": "housing_requirement"
             }
         ]
     }
@@ -111,7 +115,17 @@ def setup_atlas_vector_search_index(db: Database | None = None) -> bool:
         existing_indexes = list(pets_col.list_search_indexes())
         for idx in existing_indexes:
             if idx.get("name") == ATLAS_VECTOR_SEARCH_INDEX_NAME:
-                logger.info("Atlas Vector Search index '%s' already exists.", ATLAS_VECTOR_SEARCH_INDEX_NAME)
+                existing_definition = idx.get("latestDefinition", idx.get("definition"))
+                desired_definition = ATLAS_VECTOR_SEARCH_INDEX_DEFINITION["definition"]
+                if existing_definition == desired_definition:
+                    logger.info("Atlas Vector Search index '%s' already exists.", ATLAS_VECTOR_SEARCH_INDEX_NAME)
+                    return True
+
+                pets_col.update_search_index(
+                    ATLAS_VECTOR_SEARCH_INDEX_NAME,
+                    desired_definition
+                )
+                logger.info("Atlas Vector Search index '%s' updated.", ATLAS_VECTOR_SEARCH_INDEX_NAME)
                 return True
 
         from pymongo.operations import SearchIndexModel
@@ -123,11 +137,10 @@ def setup_atlas_vector_search_index(db: Database | None = None) -> bool:
         pets_col.create_search_index(model=model)
         logger.info("Atlas Vector Search index '%s' created successfully.", ATLAS_VECTOR_SEARCH_INDEX_NAME)
         return True
-    except (OperationFailure, AttributeError, Exception) as e:
+    except (PyMongoError, AttributeError) as e:
         logger.warning(
             "Programmatic Atlas Vector Search index creation not supported or requires Atlas UI/API: %s. "
-            "Index definition definition is preserved in ATLAS_VECTOR_SEARCH_INDEX_DEFINITION.",
+            "Index definition is preserved in ATLAS_VECTOR_SEARCH_INDEX_DEFINITION.",
             e
         )
         return False
-

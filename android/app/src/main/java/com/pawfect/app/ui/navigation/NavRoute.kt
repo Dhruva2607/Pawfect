@@ -16,17 +16,25 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * [FROM MARKDOWN: Section 2 & Phase 5]
  */
 sealed class NavRoute(val route: String) {
+    object Home : NavRoute("home")
+
     // Screen 1: Splash / Welcome
     object Welcome : NavRoute("welcome")
 
     // Screen 2: Interactive Onboarding
     object Onboarding : NavRoute("onboarding")
 
+    object Auth : NavRoute("auth/{mode}") {
+        fun createRoute(signUp: Boolean) = "auth/${if (signUp) "signup" else "login"}"
+    }
+
     // Screen 3: AI Matchmaker Chat
     object Chat : NavRoute("chat")
 
     // Screen 4: Your Perfect Match!
     object Matches : NavRoute("matches")
+
+    object SavedPets : NavRoute("saved_pets")
 
     // Screen 5: Pet Detail Screen
     object PetDetail : NavRoute("pet_detail/{petId}") {
@@ -58,7 +66,7 @@ sealed class BottomNavItem(
     val unselectedIcon: ImageVector
 ) {
     object Home : BottomNavItem(
-        route = NavRoute.Welcome.route,
+        route = NavRoute.Home.route,
         title = "Home",
         selectedIcon = Icons.Filled.Home,
         unselectedIcon = Icons.Outlined.Home
@@ -85,4 +93,3 @@ sealed class BottomNavItem(
         unselectedIcon = Icons.Outlined.Person
     )
 }
-

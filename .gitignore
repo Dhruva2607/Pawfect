@@ -44,7 +44,6 @@ logs/
 *.sqlite3
 *.db
 /data/
-!frontend/src/data/
 
 # --- Byte-compiled ---
 *.pyc
@@ -56,19 +55,11 @@ htmlcov/
 
 # --- Android (when building locally) ---
 android/.gradle/
+android/.kotlin/
 android/build/
 android/app/build/
 android/local.properties
 android/*.iml
 *.hprof
 
-# --- Web Frontend (React + Vite) ---
-frontend/node_modules/
-frontend/dist/
-frontend/.env.local
-web/node_modules/
-web/dist/
-web/.env.local
 node_modules/
-
-

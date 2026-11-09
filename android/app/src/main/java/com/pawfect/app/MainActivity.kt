@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import com.pawfect.app.ui.navigation.PawFectMainScaffold
 import com.pawfect.app.ui.theme.PawFectTheme
 import dagger.hilt.android.AndroidEntryPoint
+import com.pawfect.app.data.local.SessionManager
+import javax.inject.Inject
 
 /**
  * Single activity entry point hosting the Jetpack Compose navigation graph.
@@ -17,6 +19,9 @@ import dagger.hilt.android.AndroidEntryPoint
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject
+    lateinit var sessionManager: SessionManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -25,10 +30,12 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    PawFectMainScaffold()
+                    PawFectMainScaffold(
+                        isAuthenticated = sessionManager.currentSession() != null,
+                        onLogout = sessionManager::logout
+                    )
                 }
             }
         }
     }
 }
-

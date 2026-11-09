@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -69,6 +69,7 @@ fun CompatibilityScreen(
             ) {
                 Button(
                     onClick = onContinueToAdoption,
+                    enabled = eval != null,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
@@ -77,13 +78,13 @@ fun CompatibilityScreen(
                 ) {
                     Text("Continue to Adoption Process")
                     Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
             }
         },
         containerColor = BackgroundWarm
     ) { paddingValues ->
-        if (uiState.isLoading || eval == null) {
+        if (uiState.isLoading && eval == null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -91,6 +92,19 @@ fun CompatibilityScreen(
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator()
+            }
+        } else if (eval == null) {
+            Column(
+                Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    uiState.error ?: "Compatibility could not be calculated.",
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { viewModel.evaluatePet(petId) }) { Text("Try again") }
             }
         } else {
             Column(

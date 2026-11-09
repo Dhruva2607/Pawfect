@@ -4,6 +4,30 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class AuthRequestDto(
+    val email: String,
+    val password: String,
+    val name: String? = null,
+    @SerialName("housing_type") val housingType: String = "apartment",
+    @SerialName("has_children") val hasChildren: Boolean = false,
+    @SerialName("has_other_pets") val hasOtherPets: Boolean = false,
+    @SerialName("energy_budget") val energyBudget: Int = 3
+)
+
+@Serializable
+data class AuthResponseDto(
+    @SerialName("user_id") val userId: String,
+    val name: String,
+    val email: String,
+    val token: String,
+    @SerialName("housing_type") val housingType: String? = null,
+    @SerialName("has_children") val hasChildren: Boolean? = null,
+    @SerialName("has_other_pets") val hasOtherPets: Boolean? = null,
+    @SerialName("energy_budget") val energyBudget: Int? = null,
+    @SerialName("saved_pets") val savedPets: List<String> = emptyList()
+)
+
+@Serializable
 data class DirectEvalRequestDto(
     @SerialName("session_id") val sessionId: String,
     @SerialName("pet_id") val petId: String,
@@ -54,7 +78,24 @@ data class UserProfileDto(
     val name: String,
     val email: String,
     @SerialName("avatar_url") val avatarUrl: String? = null,
-    @SerialName("saved_pets") val savedPets: List<String> = emptyList()
+    @SerialName("housing_type") val housingType: String? = null,
+    @SerialName("has_children") val hasChildren: Boolean? = null,
+    @SerialName("has_other_pets") val hasOtherPets: Boolean? = null,
+    @SerialName("energy_budget") val energyBudget: Int? = null,
+    @SerialName("saved_pets") val savedPets: List<String> = emptyList(),
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null
+)
+
+@Serializable
+data class UserProfileUpdateDto(
+    val name: String? = null,
+    val email: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("housing_type") val housingType: String? = null,
+    @SerialName("has_children") val hasChildren: Boolean? = null,
+    @SerialName("has_other_pets") val hasOtherPets: Boolean? = null,
+    @SerialName("energy_budget") val energyBudget: Int? = null
 )
 
 @Serializable
@@ -64,4 +105,3 @@ data class FavoriteToggleResponseDto(
     @SerialName("is_favorited") val isFavorited: Boolean,
     @SerialName("saved_pets_count") val savedPetsCount: Int
 )
-

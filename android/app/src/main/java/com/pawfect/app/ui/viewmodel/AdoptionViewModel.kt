@@ -2,6 +2,7 @@ package com.pawfect.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pawfect.app.data.local.SessionManager
 import com.pawfect.app.data.model.AdoptionApplyRequestDto
 import com.pawfect.app.data.model.AdoptionStatusResponseDto
 import com.pawfect.app.data.model.PetDto
@@ -20,12 +21,14 @@ data class AdoptionUiState(
     val isLoading: Boolean = false,
     val pet: PetDto? = null,
     val currentStep: AdoptionStep = AdoptionStep.REVIEW,
-    val applicantName: String = "Jane Doe",
-    val applicantEmail: String = "jane.doe@example.com",
-    val applicantPhone: String = "555-0199",
-    val housingDetails: String = "2-bedroom apartment with secure balcony",
-    val notes: String = "Our family is ready to welcome our new best friend!",
+    val applicantName: String = "",
+    val applicantEmail: String = "",
+    val applicantPhone: String = "",
+    val housingDetails: String = "",
+    val householdMembers: String = "",
+    val notes: String = "",
     val applicationResult: AdoptionStatusResponseDto? = null,
+    val isRefreshingStatus: Boolean = false,
     val isSubmitted: Boolean = false,
     val error: String? = null
 )
@@ -33,7 +36,8 @@ data class AdoptionUiState(
 @HiltViewModel
 class AdoptionViewModel @Inject constructor(
     private val adoptionRepository: AdoptionRepository,
-    private val petRepository: PetRepository
+    private val petRepository: PetRepository,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AdoptionUiState())
@@ -43,9 +47,18 @@ class AdoptionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val pet = petRepository.getPet(petId)
-                _uiState.update { it.copy(pet = pet) }
+                val session = sessionManager.currentSession()
+                _uiState.update {
+                    it.copy(
+                        pet = pet,
+                        applicantName = session?.name.orEmpty(),
+                        applicantEmail = session?.email.orEmpty()
+                    )
+                }
             } catch (e: Exception) {
-                // Ignore
+                _uiState.update {
+                    it.copy(error = e.localizedMessage ?: "Could not load this pet.")
+                }
             }
         }
     }
@@ -54,22 +67,62 @@ class AdoptionViewModel @Inject constructor(
         _uiState.update { it.copy(currentStep = step) }
     }
 
-    fun submitApplication(petId: String) {
-        val state = _uiState.value
+    fun refreshApplicationStatus() {
+        val applicationId = _uiState.value.applicationResult?.applicationId ?: return
+        _uiState.update { it.copy(isRefreshingStatus = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val response = adoptionRepository.getAdoptionStatus(applicationId)
+                _uiState.update {
+                    it.copy(
+                        applicationResult = response,
+                        isRefreshingStatus = false,
+                        error = null
+                    )
+                }
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isRefreshingStatus = false,
+                        error = error.localizedMessage ?: "Could not refresh application status."
+                    )
+                }
+            }
+        }
+    }
+
+    fun submitApplication(
+        petId: String,
+        applicantName: String,
+        applicantEmail: String,
+        applicantPhone: String,
+        housingDetails: String,
+        householdMembers: String,
+        notes: String
+    ) {
+        val session = sessionManager.currentSession()
+        if (applicantName.isBlank() || applicantEmail.isBlank()) {
+            _uiState.update { it.copy(error = "Name and email are required to apply.") }
+            return
+        }
+        if (session == null) {
+            _uiState.update { it.copy(error = "Sign in before submitting an adoption application.") }
+            return
+        }
         _uiState.update { it.copy(isLoading = true, error = null) }
 
         viewModelScope.launch {
             try {
                 val resp = adoptionRepository.applyAdoption(
                     AdoptionApplyRequestDto(
-                        userId = "user_default",
+                        userId = session.userId,
                         petId = petId,
-                        applicantName = state.applicantName,
-                        applicantEmail = state.applicantEmail,
-                        applicantPhone = state.applicantPhone,
-                        housingDetails = state.housingDetails,
-                        household_members = "Family with 1 child",
-                        notes = state.notes
+                        applicantName = applicantName.trim(),
+                        applicantEmail = applicantEmail.trim(),
+                        applicantPhone = applicantPhone.trim().takeIf { it.isNotEmpty() },
+                        housingDetails = housingDetails.trim(),
+                        householdMembers = householdMembers.trim(),
+                        notes = notes.trim()
                     )
                 )
                 _uiState.update {
@@ -81,9 +134,13 @@ class AdoptionViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.localizedMessage ?: "Could not submit the application. Please try again."
+                    )
+                }
             }
         }
     }
 }
-

@@ -6,12 +6,16 @@ Pet catalog endpoints.
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from app.database.connection import get_async_db
-from app.models.pet import Pet
+from app.models.pet import Pet, PetResponse
 
 router = APIRouter(prefix="/pets", tags=["Pets"])
 
 
-@router.get("", response_model=List[Pet], summary="List all available pets")
+@router.get(
+    "",
+    response_model=List[PetResponse],
+    summary="List all available pets"
+)
 async def list_pets(
     species: Optional[str] = Query(None, description="Filter by species: dog, cat"),
     size: Optional[str] = Query(None, description="Filter by size: small, medium, large"),
@@ -36,7 +40,11 @@ async def list_pets(
     return [Pet(**p) for p in pets]
 
 
-@router.get("/{id}", response_model=Pet, summary="Get pet details by ID")
+@router.get(
+    "/{id}",
+    response_model=PetResponse,
+    summary="Get pet details by ID"
+)
 async def get_pet(id: str):
     """
     [FROM MARKDOWN: Step 3.1 & Section 4]
@@ -50,4 +58,3 @@ async def get_pet(id: str):
             detail=f"Pet with ID '{id}' not found."
         )
     return Pet(**doc)
-

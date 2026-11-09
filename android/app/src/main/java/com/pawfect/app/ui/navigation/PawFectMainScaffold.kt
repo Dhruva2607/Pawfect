@@ -15,8 +15,12 @@ import androidx.navigation.compose.rememberNavController
  * Home (Onboarding/Dashboard), Matches, and Profile."
  */
 @Composable
-fun PawFectMainScaffold() {
+fun PawFectMainScaffold(
+    isAuthenticated: Boolean,
+    onLogout: () -> Unit
+) {
     val navController = rememberNavController()
+    var authenticated by remember { mutableStateOf(isAuthenticated) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -28,10 +32,11 @@ fun PawFectMainScaffold() {
     )
 
     // Show bottom bar on primary tabs
-    val showBottomBar = currentRoute in listOf(
-        NavRoute.Welcome.route,
+    val showBottomBar = authenticated && currentRoute in listOf(
+        NavRoute.Home.route,
         NavRoute.Chat.route,
         NavRoute.Matches.route,
+        NavRoute.SavedPets.route,
         NavRoute.Profile.route
     )
 
@@ -43,7 +48,8 @@ fun PawFectMainScaffold() {
                     contentColor = MaterialTheme.colorScheme.onSurface
                 ) {
                     bottomNavItems.forEach { item ->
-                        val selected = currentRoute == item.route
+                        val selected = currentRoute == item.route ||
+                            (item == BottomNavItem.Matches && currentRoute == NavRoute.SavedPets.route)
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
@@ -78,8 +84,16 @@ fun PawFectMainScaffold() {
     ) { innerPadding ->
         PawFectNavGraph(
             navController = navController,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            startDestination = if (isAuthenticated) NavRoute.Home.route else NavRoute.Welcome.route,
+            onAuthenticated = { authenticated = true },
+            onLogout = {
+                onLogout()
+                authenticated = false
+                navController.navigate(NavRoute.Welcome.route) {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                }
+            }
         )
     }
 }
-

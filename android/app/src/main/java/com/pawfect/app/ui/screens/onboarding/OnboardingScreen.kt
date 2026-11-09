@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 fun OnboardingScreen(
     onFinishOnboarding: () -> Unit
 ) {
-    var currentPage by remember { mutableStateOf(0) }
+    var currentPage by remember { mutableIntStateOf(0) }
     val pages = listOf(
         "Chat Naturally" to "Tell our AI about your home, work hours, kids, and energy budget.",
         "Precision RAG Matching" to "We query shelter databases using vector embeddings to find compatible animals.",
@@ -95,4 +95,3 @@ fun OnboardingScreen(
         }
     }
 }
-

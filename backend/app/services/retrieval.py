@@ -7,6 +7,7 @@ import math
 import logging
 from typing import List, Dict, Any, Optional
 from pymongo.database import Database
+from pymongo.errors import PyMongoError
 from app.database.connection import get_sync_db
 from app.services.embedding import generate_embedding
 from app.database.indexes import ATLAS_VECTOR_SEARCH_INDEX_NAME
@@ -100,66 +101,57 @@ def hybrid_search_pets(
     mql_filter = build_mql_prefilter(constraints)
     logger.info("Executing hybrid search with MQL filter: %s", mql_filter)
 
-    # 3. Try Atlas $vectorSearch pipeline first
-    try:
-        pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": ATLAS_VECTOR_SEARCH_INDEX_NAME,
-                    "path": "embedding",
-                    "queryVector": query_vector,
-                    "numCandidates": top_k * 10,
-                    "limit": top_k,
-                    "filter": mql_filter if mql_filter else {}
+    # Atlas Vector Search does not support the regex predicates used for allergy filtering.
+    # Keep those searches on the regular MongoDB query path instead.
+    if "$or" not in mql_filter:
+        try:
+            pipeline = [
+                {
+                    "$vectorSearch": {
+                        "index": ATLAS_VECTOR_SEARCH_INDEX_NAME,
+                        "path": "embedding",
+                        "queryVector": query_vector,
+                        "numCandidates": top_k * 10,
+                        "limit": top_k,
+                        "filter": mql_filter if mql_filter else {}
+                    }
+                },
+                {
+                    "$project": {
+                        "_id": 1,
+                        "name": 1,
+                        "species": 1,
+                        "breed": 1,
+                        "age_months": 1,
+                        "gender": 1,
+                        "size": 1,
+                        "energy_level": 1,
+                        "good_with_kids": 1,
+                        "good_with_other_pets": 1,
+                        "temperament": 1,
+                        "housing_requirement": 1,
+                        "bio_text": 1,
+                        "quirks": 1,
+                        "exercise_needs": 1,
+                        "triggers": 1,
+                        "photo_url": 1,
+                        "score": {"$meta": "vectorSearchScore"}
+                    }
                 }
-            },
-            {
-                "$project": {
-                    "_id": 1,
-                    "name": 1,
-                    "species": 1,
-                    "breed": 1,
-                    "age_months": 1,
-                    "gender": 1,
-                    "size": 1,
-                    "energy_level": 1,
-                    "good_with_kids": 1,
-                    "good_with_other_pets": 1,
-                    "temperament": 1,
-                    "housing_requirement": 1,
-                    "bio_text": 1,
-                    "quirks": 1,
-                    "exercise_needs": 1,
-                    "triggers": 1,
-                    "photo_url": 1,
-                    "score": {"$meta": "vectorSearchScore"}
-                }
-            }
-        ]
-        results = list(pets_col.aggregate(pipeline))
-        if results:
-            logger.info("Retrieved %d candidates via Atlas $vectorSearch.", len(results))
-            return results
-    except Exception as e:
-        logger.debug("Atlas $vectorSearch pipeline not active on cluster (%s). Falling back to hybrid MQL + cosine ranking.", e)
+            ]
+            results = list(pets_col.aggregate(pipeline))
+            if results:
+                logger.info("Retrieved %d candidates via Atlas $vectorSearch.", len(results))
+                return results
+        except PyMongoError as e:
+            logger.info(
+                "Atlas $vectorSearch is unavailable; falling back to filtered cosine ranking: %s",
+                e,
+            )
 
     # 4. Fallback: MQL pre-filter + in-memory cosine ranking
     candidates_cursor = pets_col.find(mql_filter)
     candidates = list(candidates_cursor)
-
-    # If strict filter returned zero results, relax slightly by keeping only species & kids safety
-    if not candidates and mql_filter:
-        relaxed_filter: Dict[str, Any] = {}
-        if "species" in mql_filter:
-            relaxed_filter["species"] = mql_filter["species"]
-        if "good_with_kids" in mql_filter:
-            relaxed_filter["good_with_kids"] = True
-        logger.info("Relaxing MQL filter to: %s", relaxed_filter)
-        candidates = list(pets_col.find(relaxed_filter))
-
-    # If still empty, fall back to all pets
-    if not candidates:
-        candidates = list(pets_col.find({}))
 
     # Rank by cosine similarity
     ranked: List[Dict[str, Any]] = []
@@ -179,4 +171,3 @@ def hybrid_search_pets(
     top_candidates = ranked[:top_k]
     logger.info("Retrieved %d candidates via hybrid MQL + cosine ranking.", len(top_candidates))
     return top_candidates
-

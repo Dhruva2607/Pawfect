@@ -51,7 +51,13 @@ fun AdoptionStepperScreen(
     var applicantEmail by remember { mutableStateOf(uiState.applicantEmail) }
     var applicantPhone by remember { mutableStateOf(uiState.applicantPhone) }
     var housingDetails by remember { mutableStateOf(uiState.housingDetails) }
+    var householdMembers by remember { mutableStateOf(uiState.householdMembers) }
     var notes by remember { mutableStateOf(uiState.notes) }
+
+    LaunchedEffect(uiState.applicantName, uiState.applicantEmail) {
+        applicantName = uiState.applicantName
+        applicantEmail = uiState.applicantEmail
+    }
 
     Scaffold(
         topBar = {
@@ -79,6 +85,20 @@ fun AdoptionStepperScreen(
             AdoptionStepperBar(currentStep = uiState.currentStep)
 
             Spacer(modifier = Modifier.height(20.dp))
+
+            if (uiState.error != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                ) {
+                    Text(
+                        uiState.error.orEmpty(),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
 
             if (uiState.isSubmitted) {
                 // Celebration Graphic & Confirmation [FROM MARKDOWN: Screen 7]
@@ -114,7 +134,7 @@ fun AdoptionStepperScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Your application for ${uiState.pet?.name ?: "your match"} has been received. Our shelter team will review your lifestyle profile and contact you within 24 hours.",
+                            text = "Your application for ${uiState.pet?.name ?: "your match"} has been received. You can check its current status here.",
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -122,18 +142,38 @@ fun AdoptionStepperScreen(
 
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "Application ID: ${uiState.applicationResult?.applicationId ?: "app_verified"}",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
+                        uiState.applicationResult?.applicationId?.let { applicationId ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "Application ID: $applicationId",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(28.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "Current stage: ${uiState.applicationResult?.stageStatus?.replaceFirstChar { it.uppercase() } ?: "Submitted"}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        TextButton(
+                            onClick = viewModel::refreshApplicationStatus,
+                            enabled = !uiState.isRefreshingStatus
+                        ) {
+                            if (uiState.isRefreshingStatus) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("Refresh application status")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
                             onClick = onComplete,
@@ -207,6 +247,17 @@ fun AdoptionStepperScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         OutlinedTextField(
+                            value = householdMembers,
+                            onValueChange = { householdMembers = it },
+                            label = { Text("Household members & other pets") },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 2,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedTextField(
                             value = notes,
                             onValueChange = { notes = it },
                             label = { Text("Message to Shelter Staff") },
@@ -219,8 +270,18 @@ fun AdoptionStepperScreen(
 
                         // Actions: "Fill Adoption Form" (Submit) / "Save for Later" [FROM MARKDOWN: Screen 7]
                         Button(
-                            onClick = { viewModel.submitApplication(petId) },
-                            enabled = !uiState.isLoading,
+                            onClick = {
+                                viewModel.submitApplication(
+                                    petId = petId,
+                                    applicantName = applicantName,
+                                    applicantEmail = applicantEmail,
+                                    applicantPhone = applicantPhone,
+                                    housingDetails = housingDetails,
+                                    householdMembers = householdMembers,
+                                    notes = notes
+                                )
+                            },
+                            enabled = !uiState.isLoading && uiState.pet != null,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
@@ -241,7 +302,7 @@ fun AdoptionStepperScreen(
                                 .fillMaxWidth()
                                 .height(48.dp)
                         ) {
-                            Text("Save for Later")
+                            Text("Back")
                         }
                     }
                 }

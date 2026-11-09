@@ -8,9 +8,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.pawfect.app.ui.screens.adoption.AdoptionStepperScreen
+import com.pawfect.app.ui.screens.auth.AuthScreen
 import com.pawfect.app.ui.screens.chat.ChatScreen
 import com.pawfect.app.ui.screens.compatibility.CompatibilityScreen
 import com.pawfect.app.ui.screens.matches.MatchesScreen
+import com.pawfect.app.ui.screens.home.HomeScreen
 import com.pawfect.app.ui.screens.onboarding.OnboardingScreen
 import com.pawfect.app.ui.screens.petdetail.PetDetailScreen
 import com.pawfect.app.ui.screens.profile.ProfileScreen
@@ -23,18 +25,22 @@ import com.pawfect.app.ui.screens.welcome.WelcomeScreen
 @Composable
 fun PawFectNavGraph(
     navController: NavHostController,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    startDestination: String = NavRoute.Welcome.route,
+    onAuthenticated: () -> Unit,
+    onLogout: () -> Unit
 ) {
     NavHost(
         navController = navController,
-        startDestination = NavRoute.Welcome.route,
+        startDestination = startDestination,
         modifier = modifier
     ) {
         // Screen 1: Splash / Welcome
         composable(NavRoute.Welcome.route) {
             WelcomeScreen(
                 onGetStarted = { navController.navigate(NavRoute.Onboarding.route) },
-                onSkipToChat = { navController.navigate(NavRoute.Chat.route) }
+                onSignUp = { navController.navigate(NavRoute.Auth.createRoute(true)) },
+                onLogin = { navController.navigate(NavRoute.Auth.createRoute(false)) }
             )
         }
 
@@ -42,14 +48,39 @@ fun PawFectNavGraph(
         composable(NavRoute.Onboarding.route) {
             OnboardingScreen(
                 onFinishOnboarding = {
+                    navController.navigate(NavRoute.Auth.createRoute(true)) {
+                        popUpTo(NavRoute.Welcome.route)
+                    }
+                }
+            )
+        }
+
+        composable(
+            route = NavRoute.Auth.route,
+            arguments = listOf(navArgument("mode") { type = NavType.StringType })
+        ) { backStackEntry ->
+            AuthScreen(
+                initialSignUp = backStackEntry.arguments?.getString("mode") != "login",
+                onBack = { navController.popBackStack() },
+                onAuthenticated = {
+                    onAuthenticated()
                     navController.navigate(NavRoute.Chat.route) {
-                        popUpTo(NavRoute.Welcome.route) { inclusive = false }
+                        popUpTo(NavRoute.Welcome.route) { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
             )
         }
 
         // Screen 3: AI Matchmaker Chat
+        composable(NavRoute.Home.route) {
+            HomeScreen(
+                onViewPet = { petId -> navController.navigate(NavRoute.PetDetail.createRoute(petId)) },
+                onStartChat = { navController.navigate(NavRoute.Chat.route) },
+                onViewMatches = { navController.navigate(NavRoute.Matches.route) }
+            )
+        }
+
         composable(NavRoute.Chat.route) {
             ChatScreen(
                 onViewPetDetail = { petId ->
@@ -66,6 +97,24 @@ fun PawFectNavGraph(
             MatchesScreen(
                 onSelectPet = { petId ->
                     navController.navigate(NavRoute.PetDetail.createRoute(petId))
+                },
+                onApply = { petId ->
+                    navController.navigate(NavRoute.AdoptionStepper.createRoute(petId))
+                },
+                onStartChat = {
+                    navController.navigate(NavRoute.Chat.route)
+                }
+            )
+        }
+
+        composable(NavRoute.SavedPets.route) {
+            MatchesScreen(
+                savedOnly = true,
+                onSelectPet = { petId ->
+                    navController.navigate(NavRoute.PetDetail.createRoute(petId))
+                },
+                onApply = { petId ->
+                    navController.navigate(NavRoute.AdoptionStepper.createRoute(petId))
                 },
                 onStartChat = {
                     navController.navigate(NavRoute.Chat.route)
@@ -130,10 +179,10 @@ fun PawFectNavGraph(
         composable(NavRoute.Profile.route) {
             ProfileScreen(
                 onNavigateToMatches = { navController.navigate(NavRoute.Matches.route) },
-                onNavigateToSavedPets = { navController.navigate(NavRoute.Matches.route) },
-                onNavigateToChatHistory = { navController.navigate(NavRoute.Chat.route) }
+                onNavigateToSavedPets = { navController.navigate(NavRoute.SavedPets.route) },
+                onNavigateToChatHistory = { navController.navigate(NavRoute.Chat.route) },
+                onLogout = onLogout
             )
         }
     }
 }
-

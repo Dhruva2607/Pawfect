@@ -3,12 +3,15 @@ PawFect FastAPI Application.
 [FROM MARKDOWN] matches Step 3.1, Step 3.2, Step 3.3, and Section 4.
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.database.indexes import setup_standard_indexes, setup_atlas_vector_search_index
+from app.database.connection import close_clients, get_async_db
 from app.routers import (
     chat_router,
     pets_router,
@@ -28,15 +31,16 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Initializing PawFect API server...")
     try:
-        setup_standard_indexes()
+        await asyncio.to_thread(setup_standard_indexes)
         setup_atlas_vector_search_index()
         logger.info("PawFect database indexes verified.")
-    except Exception as e:
-        logger.warning("Database index check during startup warning: %s", e)
+    except Exception:
+        logger.exception("Database index setup failed; database-backed requests will remain unavailable.")
 
     yield
 
     logger.info("Shutting down PawFect API server...")
+    await asyncio.to_thread(close_clients)
 
 
 app = FastAPI(
@@ -51,7 +55,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -66,9 +70,34 @@ app.include_router(users_router, prefix="/api/v1")
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    """Health check endpoint for service status verification."""
+    """Readiness check that includes the required MongoDB dependency."""
+    try:
+        await get_async_db().command("ping")
+    except Exception:
+        logger.exception("MongoDB readiness check failed.")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unavailable",
+                "service": "PawFect API",
+                "version": "1.0.0",
+                "database": "unavailable"
+            }
+        )
+
     return {
         "status": "healthy",
+        "service": "PawFect API",
+        "version": "1.0.0",
+        "database": "connected"
+    }
+
+
+@app.get("/health/live", tags=["Health"])
+async def liveness_check():
+    """Liveness check that does not depend on external services."""
+    return {
+        "status": "alive",
         "service": "PawFect API",
         "version": "1.0.0"
     }

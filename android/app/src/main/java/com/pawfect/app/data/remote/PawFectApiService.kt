@@ -10,7 +10,7 @@ import retrofit2.http.*
 interface PawFectApiService {
 
     @GET("pets")
-    async suspend fun listPets(
+    suspend fun listPets(
         @Query("species") species: String? = null,
         @Query("size") size: String? = null,
         @Query("good_with_kids") goodWithKids: Boolean? = null,
@@ -22,6 +22,18 @@ interface PawFectApiService {
 
     @POST("matches/direct-eval")
     suspend fun directEval(@Body request: DirectEvalRequestDto): DirectEvalResponseDto
+
+    @POST("users/auth/login")
+    suspend fun login(@Body request: AuthRequestDto): AuthResponseDto
+
+    @POST("users/auth/signup")
+    suspend fun signup(@Body request: AuthRequestDto): AuthResponseDto
+
+    @PUT("users/{id}/profile")
+    suspend fun updateUserProfile(
+        @Path("id") id: String,
+        @Body request: UserProfileUpdateDto
+    ): UserProfileDto
 
     @POST("adoptions/apply")
     suspend fun applyAdoption(@Body request: AdoptionApplyRequestDto): AdoptionStatusResponseDto
@@ -44,4 +56,3 @@ interface PawFectApiService {
     @POST("chat/message")
     suspend fun sendChatMessage(@Body request: ChatRequestDto): ChatResponseDto
 }
-

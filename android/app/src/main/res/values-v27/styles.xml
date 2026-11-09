@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.PawFect" parent="Theme.PawFect.Base">
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

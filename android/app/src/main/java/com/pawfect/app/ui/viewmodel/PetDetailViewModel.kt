@@ -2,6 +2,7 @@ package com.pawfect.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pawfect.app.data.local.SessionManager
 import com.pawfect.app.data.model.PetDto
 import com.pawfect.app.data.repository.PetRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,7 +22,8 @@ data class PetDetailUiState(
 
 @HiltViewModel
 class PetDetailViewModel @Inject constructor(
-    private val petRepository: PetRepository
+    private val petRepository: PetRepository,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PetDetailUiState())
@@ -32,7 +34,9 @@ class PetDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val pet = petRepository.getPet(petId)
-                val savedPets = petRepository.getSavedPets("user_default").map { it.id }.toSet()
+                val savedPets = petRepository.getSavedPets(
+                    sessionManager.currentSession()?.userId.orEmpty()
+                ).map { it.id }.toSet()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -41,7 +45,12 @@ class PetDetailViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.localizedMessage ?: "Could not load this pet. Check your connection and try again."
+                    )
+                }
             }
         }
     }
@@ -50,12 +59,16 @@ class PetDetailViewModel @Inject constructor(
         val currentPet = _uiState.value.pet ?: return
         viewModelScope.launch {
             try {
-                val resp = petRepository.toggleFavorite("user_default", currentPet.id)
+                val resp = petRepository.toggleFavorite(
+                    sessionManager.currentSession()?.userId.orEmpty(),
+                    currentPet.id
+                )
                 _uiState.update { it.copy(isFavorited = resp.isFavorited) }
             } catch (e: Exception) {
-                // Ignore
+                _uiState.update {
+                    it.copy(error = e.localizedMessage ?: "Could not update saved pets. Please try again.")
+                }
             }
         }
     }
 }
-
