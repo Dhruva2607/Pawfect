@@ -92,7 +92,7 @@ async def _generate_sse_stream(
     # 1. Emit typing indicator
     yield {
         "event": "typing",
-        "data": json.dumps({"status": "thinking", "session_id": session_id})
+        "data": json.dumps({"event": "typing", "status": "thinking", "session_id": session_id})
     }
     await asyncio.sleep(0.05)
 
@@ -120,7 +120,7 @@ async def _generate_sse_stream(
         chunk = word + (" " if idx < len(words) - 1 else "")
         yield {
             "event": "token",
-            "data": json.dumps({"token": chunk, "session_id": session_id})
+            "data": json.dumps({"event": "token", "token": chunk, "session_id": session_id})
         }
         await asyncio.sleep(0.02)  # Natural typing rhythm
 
@@ -128,7 +128,7 @@ async def _generate_sse_stream(
     if quick_replies:
         yield {
             "event": "quick_replies",
-            "data": json.dumps({"quick_replies": quick_replies, "session_id": session_id})
+            "data": json.dumps({"event": "quick_replies", "quick_replies": quick_replies, "options": quick_replies, "session_id": session_id})
         }
 
     # 5. If matches are found, emit matches and evaluations
@@ -136,7 +136,9 @@ async def _generate_sse_stream(
         yield {
             "event": "matches",
             "data": json.dumps({
+                "event": "matches",
                 "candidate_matches": candidates,
+                "matches": candidates,
                 "evaluations": evaluations,
                 "session_id": session_id
             })
@@ -146,6 +148,7 @@ async def _generate_sse_stream(
     yield {
         "event": "done",
         "data": json.dumps({
+            "event": "done",
             "session_id": session_id,
             "is_complete": is_complete,
             "response_message": response_text

@@ -225,6 +225,7 @@ export async function streamChatMessage({
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
+    let currentEvent = 'message';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -236,36 +237,53 @@ export async function streamChatMessage({
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
+        if (!trimmed) {
+          currentEvent = 'message';
+          continue;
+        }
 
-        const dataStr = trimmed.replace(/^data:\s*/, '');
-        try {
-          const event = JSON.parse(dataStr);
-          switch (event.event) {
-            case 'typing':
-              onTyping?.(event.data);
-              break;
-            case 'token':
-              onToken?.(event.data.token);
-              break;
-            case 'quick_replies':
-              const replies = event.data.quick_replies || event.data.options || [];
-              onQuickReplies?.(replies);
-              break;
-            case 'matches':
-              const candidates = event.data.candidate_matches || event.data.matches || [];
-              const evals = event.data.evaluations || [];
-              onMatches?.({ candidate_matches: candidates, evaluations: evals });
-              break;
-            case 'done':
-              onDone?.(event.data);
-              break;
-            case 'error':
-              onError?.(new Error(event.data.message));
-              break;
+        if (trimmed.startsWith('event:')) {
+          currentEvent = trimmed.replace(/^event:\s*/, '').trim();
+          continue;
+        }
+
+        if (trimmed.startsWith('data:')) {
+          const dataStr = trimmed.replace(/^data:\s*/, '').trim();
+          try {
+            const payload = JSON.parse(dataStr);
+            const eventType = payload.event || currentEvent;
+
+            switch (eventType) {
+              case 'typing':
+                onTyping?.(payload);
+                break;
+              case 'token':
+                if (payload.token) onToken?.(payload.token);
+                break;
+              case 'quick_replies':
+                const replies = payload.quick_replies || payload.options || [];
+                onQuickReplies?.(replies);
+                break;
+              case 'matches':
+                const candidates = payload.candidate_matches || payload.matches || [];
+                const evals = payload.evaluations || [];
+                onMatches?.({ candidate_matches: candidates, evaluations: evals });
+                break;
+              case 'done':
+                onDone?.(payload);
+                break;
+              case 'error':
+                onError?.(new Error(payload.message || 'Error'));
+                break;
+              default:
+                if (payload.token) onToken?.(payload.token);
+                if (payload.quick_replies) onQuickReplies?.(payload.quick_replies);
+                if (payload.candidate_matches) onMatches?.({ candidate_matches: payload.candidate_matches, evaluations: payload.evaluations || [] });
+                break;
+            }
+          } catch (e) {
+            console.warn('Error parsing SSE json chunk:', e);
           }
-        } catch (e) {
-          console.warn('Error parsing SSE json chunk:', e);
         }
       }
     }

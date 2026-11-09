@@ -81,7 +81,7 @@ export default function ChatCounselor({
 
   const handleSend = async (messageText) => {
     const text = messageText || input;
-    if (!text.trim() || isTyping) return;
+    if (!text.trim()) return;
 
     setInput('');
     setQuickReplies([]);
@@ -99,6 +99,26 @@ export default function ChatCounselor({
 
     let receivedTokens = false;
 
+    // Safety watchdog: If network or LLM stalls for >7s, automatically trigger graceful counselor answer
+    const watchdog = setTimeout(() => {
+      if (!receivedTokens) {
+        console.warn('Watchdog triggered: applying responsive counselor answer');
+        const fallback = generateLocalAiFallback(text);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMsgId
+              ? { ...msg, content: fallback.responseMsg, isStreaming: false }
+              : msg
+          )
+        );
+        setTopMatches(fallback.candidates);
+        setEvaluations(fallback.evals);
+        setQuickReplies(fallback.quickReplies);
+        setIsTyping(false);
+        if (onUnlockCatalog) onUnlockCatalog(fallback.candidates);
+      }
+    }, 7000);
+
     try {
       await streamChatMessage({
         sessionId,
@@ -109,6 +129,7 @@ export default function ChatCounselor({
         },
         onToken: (token) => {
           receivedTokens = true;
+          clearTimeout(watchdog);
           setIsTyping(false);
           setMessages((prev) =>
             prev.map((msg) =>
@@ -130,6 +151,7 @@ export default function ChatCounselor({
           }
         },
         onDone: (data) => {
+          clearTimeout(watchdog);
           setIsTyping(false);
           setMessages((prev) =>
             prev.map((msg) =>
@@ -144,8 +166,8 @@ export default function ChatCounselor({
           );
         },
         onError: (err) => {
+          clearTimeout(watchdog);
           console.warn('Backend SSE streaming unavailable, running local counselor engine:', err);
-          // Fall back gracefully to local engine so user is never blocked
           const fallback = generateLocalAiFallback(text);
           setMessages((prev) =>
             prev.map((msg) =>
@@ -162,6 +184,7 @@ export default function ChatCounselor({
         }
       });
     } catch (e) {
+      clearTimeout(watchdog);
       console.warn('Fetch failed, switching to local intelligence:', e);
       const fallback = generateLocalAiFallback(text);
       setMessages((prev) =>
