@@ -249,13 +249,16 @@ export async function streamChatMessage({
               onToken?.(event.data.token);
               break;
             case 'quick_replies':
-              onQuickReplies?.(event.data.options);
+              const replies = event.data.quick_replies || event.data.options || [];
+              onQuickReplies?.(replies);
               break;
             case 'matches':
-              onMatches?.(event.data.matches, event.data.evaluations);
+              const candidates = event.data.candidate_matches || event.data.matches || [];
+              const evals = event.data.evaluations || [];
+              onMatches?.({ candidate_matches: candidates, evaluations: evals });
               break;
             case 'done':
-              onDone?.();
+              onDone?.(event.data);
               break;
             case 'error':
               onError?.(new Error(event.data.message));

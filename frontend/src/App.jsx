@@ -8,11 +8,22 @@ import AdoptionModal from './components/AdoptionModal';
 import AuthModal from './components/AuthModal';
 import { SAMPLE_PETS } from './data/samplePets';
 import { listPets, getSavedPets, toggleFavorite } from './services/api';
-import { Search, Heart, Sparkles, Shield, AlertCircle, RefreshCw, PawPrint, LogIn, Lock } from 'lucide-react';
+import { Search, Heart, Sparkles, Shield, AlertCircle, RefreshCw, PawPrint, LogIn, Lock, ArrowRight, MessageSquare } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('explore'); // 'explore' | 'chat' | 'saved' | 'profile'
+  // AI-first flow: Start on 'chat'
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'explore' | 'saved' | 'profile'
   
+  // Intake requirement state (requires using chatbot first)
+  const [hasCompletedIntake, setHasCompletedIntake] = useState(() => {
+    try {
+      return localStorage.getItem('pawfect_completed_intake') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [showIntakeNotice, setShowIntakeNotice] = useState(false);
+
   // Authentication state
   const [user, setUser] = useState(() => {
     try {
@@ -25,7 +36,7 @@ export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authTriggerReason, setAuthTriggerReason] = useState(null);
 
-  // Pet catalog state (initialized with SAMPLE_PETS so pets are never missing!)
+  // Pet catalog state (initialized with SAMPLE_PETS)
   const [pets, setPets] = useState(SAMPLE_PETS);
   const [savedPetIds, setSavedPetIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
@@ -41,7 +52,7 @@ export default function App() {
   const [compatPet, setCompatPet] = useState(null);
   const [adoptPet, setAdoptPet] = useState(null);
 
-  // Load live pets from backend on mount or when user changes
+  // Load live pets from backend
   useEffect(() => {
     loadLivePets();
     if (user) {
@@ -57,7 +68,6 @@ export default function App() {
         setPets(fetched);
         setIsLiveBackend(true);
       } else {
-        // Fallback to sample pets if empty
         setPets(SAMPLE_PETS);
       }
     } catch (err) {
@@ -91,7 +101,16 @@ export default function App() {
     setUser(null);
     localStorage.removeItem('pawfect_user');
     setSavedPetIds(new Set());
-    setActiveTab('explore');
+    setActiveTab('chat');
+  };
+
+  const handleUnlockCatalog = (matches, switchTab = false) => {
+    setHasCompletedIntake(true);
+    localStorage.setItem('pawfect_completed_intake', 'true');
+    setShowIntakeNotice(false);
+    if (switchTab) {
+      setActiveTab('explore');
+    }
   };
 
   // Guard for protected specialties
@@ -127,14 +146,17 @@ export default function App() {
   };
 
   const handleTabChange = (tabId) => {
-    if (tabId === 'chat' && !user) {
-      requireAuth('AI Matchmaker Counselor', () => setActiveTab('chat'));
+    // If user tries to click explore before chatting with AI, show intake notice
+    if (tabId === 'explore' && !hasCompletedIntake) {
+      setShowIntakeNotice(true);
       return;
     }
+
     if (tabId === 'saved' && !user) {
       requireAuth('Saved Pets', () => setActiveTab('saved'));
       return;
     }
+
     setActiveTab(tabId);
   };
 
@@ -163,34 +185,32 @@ export default function App() {
         setActiveTab={handleTabChange} 
         savedCount={savedPetIds.size} 
         user={user}
+        hasCompletedIntake={hasCompletedIntake}
         onOpenAuth={() => { setAuthTriggerReason(null); setIsAuthOpen(true); }}
         onLogout={handleLogout}
       />
 
-      {/* Guest Banner if not signed in */}
-      {!user && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-xs text-amber-900 flex items-center justify-between">
-          <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <span>
-                <strong>Browsing as Guest.</strong> Sign in to chat with the AI counselor, evaluate compatibility, and save favorites.
-              </span>
-            </div>
-            <button
-              onClick={() => { setAuthTriggerReason('Sign In'); setIsAuthOpen(true); }}
-              className="ml-3 font-bold underline hover:text-amber-800 whitespace-nowrap"
-            >
-              Sign In / Sign Up →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content Container */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6">
         
-        {/* TAB 1: EXPLORE PETS CATALOG (Default Landing) */}
+        {/* TAB 1: AI MATCHMAKER CHAT (PRIMARY ENTRY POINT) */}
+        {activeTab === 'chat' && (
+          <div className="animate-fade-in">
+            <ChatCounselor 
+              user={user}
+              hasCompletedIntake={hasCompletedIntake}
+              onUnlockCatalog={handleUnlockCatalog}
+              onViewPet={(pet) => setDetailPet(pet)}
+              onAdoptPet={(pet) => {
+                if (requireAuth('Adoption Application', () => setAdoptPet(pet))) {
+                  setAdoptPet(pet);
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {/* TAB 2: EXPLORE PETS CATALOG (UNLOCKED AFTER CHATBOT) */}
         {activeTab === 'explore' && (
           <div className="animate-fade-in space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -199,17 +219,17 @@ export default function App() {
                   Available Shelter Pets
                 </h1>
                 <p className="text-sm text-stone-500 mt-1">
-                  Discover loving companions ready for adoption. {isLiveBackend ? '• Live MongoDB Atlas catalog' : '• Sample catalog'}
+                  Browse our verified shelter pets. {isLiveBackend ? '• Live MongoDB Atlas catalog' : '• Verified shelter catalog'}
                 </p>
               </div>
 
-              {/* AI Counselor Banner CTA */}
+              {/* AI Counselor Quick Button */}
               <button
-                onClick={() => handleTabChange('chat')}
-                className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-sm transition-all"
+                onClick={() => setActiveTab('chat')}
+                className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 text-xs font-semibold border border-amber-500/30 transition-all"
               >
-                <Sparkles className="w-4 h-4 text-amber-200" />
-                Ask AI Pet Counselor
+                <Sparkles className="w-4 h-4 text-amber-600" />
+                Back to AI Counselor
               </button>
             </div>
 
@@ -290,32 +310,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: AI MATCHMAKER CHAT */}
-        {activeTab === 'chat' && (
-          <div className="animate-fade-in">
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 flex items-center gap-2">
-                  <span>AI Pet Adoption Counselor</span>
-                  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">LangGraph Live</span>
-                </h1>
-                <p className="text-sm text-stone-500 mt-1">
-                  Chat conversationally about your living space, family, and schedule to receive AI recommendations.
-                </p>
-              </div>
-            </div>
-            
-            <ChatCounselor 
-              onViewPet={(pet) => setDetailPet(pet)}
-              onAdoptPet={(pet) => {
-                if (requireAuth('Adoption Application', () => setAdoptPet(pet))) {
-                  setAdoptPet(pet);
-                }
-              }}
-            />
-          </div>
-        )}
-
         {/* TAB 3: SAVED PETS */}
         {activeTab === 'saved' && (
           <div className="animate-fade-in space-y-6">
@@ -333,7 +327,7 @@ export default function App() {
                 <Heart className="w-12 h-12 text-stone-300 mx-auto mb-3" />
                 <h3 className="font-semibold text-stone-800 text-base">No saved pets yet</h3>
                 <p className="text-xs text-stone-400 mt-1 max-w-sm mx-auto">
-                  Click the heart icon on any pet card in Explore to save them here for side-by-side comparison.
+                  Click the heart icon on any pet card to save them here for side-by-side comparison.
                 </p>
                 <button
                   onClick={() => setActiveTab('explore')}
@@ -359,7 +353,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: PROFILE & APPLICATIONS */}
+        {/* TAB 4: PROFILE */}
         {activeTab === 'profile' && (
           <div className="animate-fade-in space-y-6 max-w-3xl">
             <div>
@@ -373,7 +367,6 @@ export default function App() {
 
             {user ? (
               <div className="space-y-6">
-                {/* Profile Card */}
                 <div className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-xs space-y-6">
                   <div className="flex items-center justify-between pb-6 border-b border-stone-100">
                     <div className="flex items-center gap-4">
@@ -413,9 +406,15 @@ export default function App() {
                       </span>
                     </div>
                     <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
-                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Energy Budget</span>
+                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Activity Preference</span>
                       <span className="text-xs font-semibold text-stone-800 mt-1 block">
                         {user.energy_budget || 3}/5 Active
+                      </span>
+                    </div>
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
+                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Intake Status</span>
+                      <span className="text-xs font-semibold text-emerald-700 mt-1 block">
+                        {hasCompletedIntake ? '✓ AI Intake Complete' : 'Pending Chat'}
                       </span>
                     </div>
                     <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
@@ -424,20 +423,13 @@ export default function App() {
                         {savedPetIds.size} Pets
                       </span>
                     </div>
-                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
-                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Status</span>
-                      <span className="text-xs font-semibold text-emerald-700 mt-1 block">
-                        Ready to Adopt
-                      </span>
-                    </div>
                   </div>
                 </div>
 
-                {/* Telemetry card */}
                 <div className="bg-stone-900 text-stone-300 rounded-2xl p-6 shadow-xs text-xs space-y-3">
                   <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
                     <Shield className="w-4 h-4" />
-                    PawFect System Status
+                    PawFect Intelligence Telemetry
                   </div>
                   <p className="leading-relaxed text-stone-400">
                     Connected to FastAPI backend with MongoDB Atlas Vector Search index (<code className="text-amber-300">vector_index</code>) 
@@ -446,7 +438,7 @@ export default function App() {
                   <div className="flex flex-wrap gap-2 pt-1">
                     <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">REST: /api/v1 Active</span>
                     <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">Catalog: {pets.length} Available</span>
-                    <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">SSE Streaming: Enabled</span>
+                    <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">SSE Streaming: Connected</span>
                   </div>
                 </div>
               </div>
@@ -477,7 +469,44 @@ export default function App() {
         <p>PawFect © 2026 — AI Pet Matchmaker. Built with Jetpack Compose & React.</p>
       </footer>
 
-      {/* AUTHENTICATION / LOGIN / SIGN UP MODAL */}
+      {/* INTAKE GATE NOTICE MODAL */}
+      {showIntakeNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center shadow-2xl border border-stone-200 space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto text-2xl">
+              🐾
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-stone-900">Meet Your AI Counselor First</h3>
+              <p className="text-xs text-stone-600 mt-2 leading-relaxed">
+                At PawFect, we use conversational AI to evaluate your home size, schedule, and family setup so you find the companion that truly fits your lifestyle.
+              </p>
+            </div>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => {
+                  setShowIntakeNotice(false);
+                  setActiveTab('chat');
+                }}
+                className="w-full py-2.5 px-4 bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+              >
+                <MessageSquare className="w-4 h-4 text-amber-400" />
+                <span>Chat with AI Counselor (Recommended)</span>
+              </button>
+              <button
+                onClick={() => {
+                  handleUnlockCatalog(null, true);
+                }}
+                className="w-full py-2 text-stone-400 hover:text-stone-700 text-xs transition-colors"
+              >
+                Skip & browse catalog directly →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AUTHENTICATION MODAL */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => { setIsAuthOpen(false); setAuthTriggerReason(null); }}

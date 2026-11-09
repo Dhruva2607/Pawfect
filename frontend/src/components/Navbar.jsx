@@ -1,19 +1,38 @@
 import React from 'react';
-import { Heart, Sparkles, Compass, User, LogIn, LogOut, CheckCircle2 } from 'lucide-react';
+import { Heart, Sparkles, Compass, User, LogIn, LogOut, Lock, CheckCircle2 } from 'lucide-react';
 
 export default function Navbar({
   activeTab,
   setActiveTab,
   savedCount = 0,
   user = null,
+  hasCompletedIntake = false,
   onOpenAuth,
   onLogout
 }) {
   const tabs = [
-    { id: 'explore', label: 'Explore Pets', icon: Compass },
-    { id: 'chat', label: 'AI Matchmaker', icon: Sparkles, badge: 'AI' },
-    { id: 'saved', label: `Saved (${savedCount})`, icon: Heart },
-    { id: 'profile', label: 'Profile', icon: User },
+    { 
+      id: 'chat', 
+      label: 'AI Matchmaker', 
+      icon: Sparkles, 
+      highlight: !hasCompletedIntake 
+    },
+    { 
+      id: 'explore', 
+      label: 'Explore Pets', 
+      icon: Compass, 
+      locked: !hasCompletedIntake 
+    },
+    { 
+      id: 'saved', 
+      label: `Saved (${savedCount})`, 
+      icon: Heart 
+    },
+    { 
+      id: 'profile', 
+      label: 'Profile', 
+      icon: User 
+    },
   ];
 
   return (
@@ -21,7 +40,7 @@ export default function Navbar({
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
         {/* Brand */}
         <div 
-          onClick={() => setActiveTab('explore')}
+          onClick={() => setActiveTab('chat')}
           className="flex items-center gap-2.5 cursor-pointer group flex-shrink-0"
         >
           <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 font-bold group-hover:bg-amber-500 group-hover:text-white transition-all">
@@ -29,8 +48,8 @@ export default function Navbar({
           </div>
           <div>
             <span className="font-semibold text-lg tracking-tight text-stone-900">PawFect</span>
-            <span className="hidden md:inline-block ml-2 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/50">
-              AI Matchmaker
+            <span className="hidden md:inline-block ml-2 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200/50">
+              AI First
             </span>
           </div>
         </div>
@@ -44,7 +63,7 @@ export default function Navbar({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap relative ${
                   isActive
                     ? 'bg-stone-900 text-white shadow-sm'
                     : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
@@ -52,6 +71,14 @@ export default function Navbar({
               >
                 <Icon className={`w-4 h-4 ${isActive ? 'text-amber-400' : 'text-stone-500'}`} />
                 <span>{tab.label}</span>
+                {tab.locked && !isActive && (
+                  <Lock className="w-3 h-3 text-stone-400 ml-0.5" />
+                )}
+                {tab.highlight && !isActive && (
+                  <span className="hidden lg:inline-block text-[9px] bg-amber-500 text-white font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider ml-1">
+                    Step 1
+                  </span>
+                )}
               </button>
             );
           })}
