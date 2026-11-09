@@ -1,0 +1,73 @@
+# ──────────────────────────────────────────────
+# PawFect .gitignore
+# ──────────────────────────────────────────────
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# --- Environment & Secrets ---
+.env
+*.env
+!.env.example
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Database / local data ---
+*.sqlite3
+*.db
+data/
+
+# --- Byte-compiled ---
+*.pyc
+
+# --- Coverage & test ---
+htmlcov/
+.coverage
+.pytest_cache/
+
+# --- Android (when building locally) ---
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.iml
+*.hprof
+
+# --- Web Frontend (React + Vite) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+web/node_modules/
+web/dist/
+web/.env.local
+node_modules/
+
+
