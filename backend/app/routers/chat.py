@@ -21,8 +21,8 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
 class ChatMessageRequest(BaseModel):
-    session_id: str = Field(..., description="Unique conversation session ID")
-    message: str = Field(..., description="User message content")
+    session_id: str = Field(..., min_length=1, max_length=128, description="Unique conversation session ID")
+    message: str = Field(..., min_length=1, max_length=4000, description="User message content")
     user_id: Optional[str] = Field(None, description="Optional associated user ID")
     stream: Optional[bool] = Field(False, description="Set true for real-time Server-Sent Events token stream")
 
@@ -67,7 +67,12 @@ async def _save_session_data(
         {"_id": session_id},
         {
             "$setOnInsert": {"user_id": user_id, "created_at": now},
-            "$push": {"conversation_history": {"$each": [user_entry, bot_entry]}},
+            "$push": {
+                "conversation_history": {
+                    "$each": [user_entry, bot_entry],
+                    "$slice": -100
+                }
+            },
             "$set": {
                 "extracted_constraints": constraints,
                 "state_checkpoint": checkpoint,
@@ -98,14 +103,26 @@ async def _generate_sse_stream(
 
     # 2. Execute state machine turn in worker thread
     loop = asyncio.get_running_loop()
-    result_state = await loop.run_in_executor(
-        None,
-        run_matchmaker_turn,
-        session_id,
-        user_message,
-        history,
-        prior_constraints
-    )
+    try:
+        result_state = await loop.run_in_executor(
+            None,
+            run_matchmaker_turn,
+            session_id,
+            user_message,
+            history,
+            prior_constraints
+        )
+    except Exception:
+        logger.exception("Chat turn failed for session %s.", session_id)
+        yield {
+            "event": "error",
+            "data": json.dumps({
+                "event": "error",
+                "message": "The chat service could not process this message.",
+                "session_id": session_id
+            })
+        }
+        return
 
     response_text = result_state.get("response_message", "")
     quick_replies = result_state.get("quick_replies", [])
@@ -144,7 +161,28 @@ async def _generate_sse_stream(
             })
         }
 
-    # 6. Emit done event
+    try:
+        await _save_session_data(
+            session_id=session_id,
+            user_id=user_id,
+            user_message=user_message,
+            bot_message=response_text,
+            constraints=updated_constraints,
+            checkpoint={"is_complete": is_complete}
+        )
+    except Exception:
+        logger.exception("Could not save chat session %s.", session_id)
+        yield {
+            "event": "error",
+            "data": json.dumps({
+                "event": "error",
+                "message": "The response could not be saved. Please try again.",
+                "session_id": session_id
+            })
+        }
+        return
+
+    # Emit done only after the response and updated state have been persisted.
     yield {
         "event": "done",
         "data": json.dumps({
@@ -154,16 +192,6 @@ async def _generate_sse_stream(
             "response_message": response_text
         })
     }
-
-    # 7. Persist session state to MongoDB
-    await _save_session_data(
-        session_id=session_id,
-        user_id=user_id,
-        user_message=user_message,
-        bot_message=response_text,
-        constraints=updated_constraints,
-        checkpoint={"is_complete": is_complete}
-    )
 
 
 @router.post("/message", summary="Send chat message (supports JSON or SSE token streaming)")
@@ -225,4 +253,3 @@ async def send_chat_message(
         evaluations=result_state.get("evaluations", []),
         extracted_constraints=updated_constraints
     )
-

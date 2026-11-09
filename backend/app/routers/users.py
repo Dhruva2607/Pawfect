@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.database.connection import get_async_db
 from app.models.user_profile import UserProfile
-from app.models.pet import Pet
+from app.models.pet import Pet, PetResponse
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -157,7 +157,11 @@ async def update_user_profile(id: str, updates: UserProfileUpdateRequest):
     return UserProfile(**updated_doc)
 
 
-@router.get("/{id}/saved-pets", response_model=List[Pet], summary="Get User's Saved/Favorite Pets")
+@router.get(
+    "/{id}/saved-pets",
+    response_model=List[PetResponse],
+    summary="Get User's Saved/Favorite Pets"
+)
 async def get_saved_pets(id: str):
     """
     [FROM MARKDOWN: Step 3.2 & Section 4]
@@ -225,4 +229,3 @@ async def toggle_favorite_pet(id: str, petId: str):
         is_favorited=is_fav,
         saved_pets_count=len(saved_pets)
     )
-

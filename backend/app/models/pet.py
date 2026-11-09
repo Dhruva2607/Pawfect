@@ -53,3 +53,8 @@ class Pet(BaseModel):
         }
     }
 
+
+class PetResponse(Pet):
+    """Pet API representation without internal vector-search data."""
+
+    embedding: Optional[List[float]] = Field(default=None, exclude=True)

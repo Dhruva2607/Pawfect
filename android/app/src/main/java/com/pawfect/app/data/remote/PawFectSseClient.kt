@@ -3,14 +3,17 @@ package com.pawfect.app.data.remote
 import android.util.Log
 import com.pawfect.app.data.model.PetDto
 import com.pawfect.app.data.model.PetEvaluationDto
+import com.pawfect.app.data.model.ChatRequestDto
 import com.pawfect.app.data.model.SseChatEvent
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.encodeToString
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -40,14 +43,14 @@ class PawFectSseClient @Inject constructor(
         message: String,
         userId: String? = null
     ): Flow<SseChatEvent> = callbackFlow {
-        val payloadJson = """
-            {
-                "session_id": "$sessionId",
-                "message": "${message.replace("\"", "\\\"")}",
-                "user_id": ${if (userId != null) "\"$userId\"" else "null"},
-                "stream": true
-            }
-        """.trimIndent()
+        val payloadJson = json.encodeToString(
+            ChatRequestDto(
+                sessionId = sessionId,
+                message = message,
+                userId = userId,
+                stream = true
+            )
+        )
 
         val request = Request.Builder()
             .url("${baseUrl}chat/message")
@@ -77,12 +80,9 @@ class PawFectSseClient @Inject constructor(
                         }
                         "quick_replies" -> {
                             val jsonObj = json.parseToJsonElement(data).jsonObject
-                            val list = jsonObj["quick_replies"]?.let {
-                                json.decodeFromJsonElement(
-                                    kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer()),
-                                    it
-                                )
-                            } ?: emptyList<String>()
+                            val list = jsonObj["quick_replies"]?.jsonArray
+                                ?.map { it.jsonPrimitive.content }
+                                .orEmpty()
                             trySend(SseChatEvent.QuickReplies(list))
                         }
                         "matches" -> {
@@ -113,12 +113,20 @@ class PawFectSseClient @Inject constructor(
                             trySend(SseChatEvent.Done(responseMsg, isComplete))
                             close()
                         }
+                        "error" -> {
+                            val jsonObj = json.parseToJsonElement(data).jsonObject
+                            val message = jsonObj["message"]?.jsonPrimitive?.content
+                                ?: "The matchmaker could not process this message."
+                            trySend(SseChatEvent.Error(IllegalStateException(message)))
+                            close()
+                        }
                         else -> {
                             Log.d(TAG, "Unhandled SSE Event: $type, data: $data")
                         }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing SSE data: $data", e)
+                    trySend(SseChatEvent.Error(e))
                 }
             }
 
@@ -141,4 +149,3 @@ class PawFectSseClient @Inject constructor(
         }
     }
 }
-

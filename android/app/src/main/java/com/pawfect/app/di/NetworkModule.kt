@@ -1,5 +1,7 @@
 package com.pawfect.app.di
 
+import com.pawfect.app.BuildConfig
+import com.pawfect.app.data.local.SessionManager
 import com.pawfect.app.data.remote.PawFectApiService
 import com.pawfect.app.data.remote.PawFectSseClient
 import dagger.Module
@@ -31,7 +33,9 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("BaseUrl")
-    fun provideBaseUrl(): String = "http://10.0.2.2:8000/api/v1/"
+    fun provideBaseUrl(): String = BuildConfig.API_BASE_URL.let {
+        if (it.endsWith("/")) it else "$it/"
+    }
 
     @Provides
     @Singleton
@@ -44,12 +48,25 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideOkHttpClient(sessionManager: SessionManager): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BASIC
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         }
         return OkHttpClient.Builder()
             .addInterceptor(logging)
+            .addInterceptor { chain ->
+                val token = sessionManager.currentSession()?.token
+                val request = chain.request().newBuilder().apply {
+                    if (!token.isNullOrBlank()) {
+                        header("Authorization", "Bearer $token")
+                    }
+                }.build()
+                chain.proceed(request)
+            }
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -78,4 +95,3 @@ object NetworkModule {
         return retrofit.create(PawFectApiService::class.java)
     }
 }
-

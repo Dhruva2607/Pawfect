@@ -2,16 +2,56 @@ package com.pawfect.app.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,209 +59,231 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.pawfect.app.ui.theme.BackgroundWarm
-import com.pawfect.app.ui.theme.PrimaryAmber
-import com.pawfect.app.ui.theme.SurfaceWarm
+import com.pawfect.app.data.local.UserSession
+import com.pawfect.app.data.model.UserProfileDto
 import com.pawfect.app.ui.viewmodel.ProfileViewModel
 
-/**
- * Screen 8: User Profile Hub
- * [FROM MARKDOWN: Phase 5 - Screen 8]
- * Account header with user avatar, name, and email, alongside navigational menu items:
- * My Matches, Saved Pets, Chat History, Settings, and About App.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     onNavigateToMatches: () -> Unit,
     onNavigateToSavedPets: () -> Unit,
     onNavigateToChatHistory: () -> Unit,
+    onLogout: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val profile = uiState.profile
+    var showSettings by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
+    val snackbarHost = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let {
+            snackbarHost.showSnackbar(it)
+            viewModel.clearMessage()
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Profile & Settings", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceWarm)
+                title = { Text("My profile", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = BackgroundWarm
-    ) { paddingValues ->
+        snackbarHost = { SnackbarHost(snackbarHost) },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp)
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp)
         ) {
-            // Account Header with Avatar, Name, Email [FROM MARKDOWN: Screen 8]
+            ProfileHeader(uiState.profile, uiState.session, uiState.savedPets.size)
+            Spacer(Modifier.height(24.dp))
+
+            if (uiState.isLoading) {
+                CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                Spacer(Modifier.height(16.dp))
+            }
+            if (uiState.error != null) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text(uiState.error ?: "", color = MaterialTheme.colorScheme.onErrorContainer)
+                        TextButton(onClick = viewModel::loadProfile) { Text("Try again") }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            Text("Your adoption journey", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
             Card(
-                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(PrimaryAmber.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("👤", fontSize = 32.sp)
-                    }
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    Column {
-                        Text(
-                            text = profile?.name ?: "Dhruv (Adopter)",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = profile?.email ?: "dhruva@pawfect.app",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "${uiState.savedPets.size} saved favorites",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = PrimaryAmber
-                        )
-                    }
+                Column {
+                    ProfileMenuItem(Icons.Default.FavoriteBorder, "My matches", "Your AI recommendations", onNavigateToMatches)
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                    ProfileMenuItem(Icons.Default.BookmarkBorder, "Saved pets", "${uiState.savedPets.size} companions saved", onNavigateToSavedPets)
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                    ProfileMenuItem(Icons.Default.ChatBubbleOutline, "Chat history", "Continue your matchmaker conversation", onNavigateToChatHistory)
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Navigational Menu Items [FROM MARKDOWN: Screen 8]
-            Text(
-                text = "Adoption Activity",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+            Spacer(Modifier.height(24.dp))
+            Text("Account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
-                    ProfileMenuItem(
-                        icon = Icons.Default.Favorite,
-                        iconTint = PrimaryAmber,
-                        title = "My Matches",
-                        subtitle = "View your personalized AI recommendations",
-                        onClick = onNavigateToMatches
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ProfileMenuItem(
-                        icon = Icons.Default.Bookmark,
-                        iconTint = Color(0xFF0D9488),
-                        title = "Saved Pets",
-                        subtitle = "${uiState.savedPets.size} pets favorited",
-                        onClick = onNavigateToSavedPets
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ProfileMenuItem(
-                        icon = Icons.Default.History,
-                        iconTint = Color(0xFF6366F1),
-                        title = "Chat History",
-                        subtitle = "Review prior counseling sessions",
-                        onClick = onNavigateToChatHistory
-                    )
+                    ProfileMenuItem(Icons.Default.Settings, "Lifestyle preferences", "Help us make thoughtful matches", { showSettings = true })
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                    ProfileMenuItem(Icons.Default.Info, "About PawFect", "AI-powered adoption, centered on you", { showAbout = true })
                 }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Application",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+            Spacer(Modifier.height(20.dp))
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(28.dp)
             ) {
-                Column {
-                    ProfileMenuItem(
-                        icon = Icons.Default.Settings,
-                        iconTint = Color.Gray,
-                        title = "Settings",
-                        subtitle = "Backend host, notifications & privacy",
-                        onClick = {}
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ProfileMenuItem(
-                        icon = Icons.Default.Info,
-                        iconTint = Color.Gray,
-                        title = "About PawFect",
-                        subtitle = "v1.0.0 • AI-powered pet matching",
-                        onClick = {}
-                    )
-                }
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Log out")
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+
+    if (showSettings) {
+        PreferencesDialog(
+            profile = uiState.profile,
+            session = uiState.session,
+            saving = uiState.isSaving,
+            onDismiss = { showSettings = false },
+            onSave = { name, email, housing, children, pets, energy ->
+                viewModel.savePreferences(name, email, housing, children, pets, energy)
+                showSettings = false
+            }
+        )
+    }
+    if (showAbout) {
+        AlertDialog(
+            onDismissRequest = { showAbout = false },
+            icon = { Icon(Icons.Default.Pets, contentDescription = null) },
+            title = { Text("PawFect") },
+            text = { Text("A thoughtful AI pet matchmaker that helps adopters discover companions suited to their home, routine, and family.") },
+            confirmButton = { TextButton(onClick = { showAbout = false }) { Text("Done") } }
+        )
+    }
+}
+
+@Composable
+private fun ProfileHeader(profile: UserProfileDto?, session: UserSession?, savedCount: Int) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
+                Icon(
+                    Icons.Default.Pets,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(16.dp).size(28.dp)
+                )
+            }
+            Spacer(Modifier.size(16.dp))
+            Column {
+                Text(profile?.name ?: session?.name ?: "Adopter", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(profile?.email ?: session?.email ?: "", style = MaterialTheme.typography.bodyMedium)
+                Text("$savedCount saved pets", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
         }
     }
 }
 
 @Composable
-fun ProfileMenuItem(
-    icon: ImageVector,
-    iconTint: Color,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
+private fun ProfileMenuItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(iconTint.copy(alpha = 0.12f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(10.dp).size(20.dp))
         }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.size(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+    }
+}
 
-        Icon(
-            Icons.AutoMirrored.Filled.ArrowForwardIos,
-            contentDescription = null,
-            tint = Color.LightGray,
-            modifier = Modifier.size(14.dp)
-        )
+@Composable
+private fun PreferencesDialog(
+    profile: UserProfileDto?,
+    session: UserSession?,
+    saving: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String, Boolean, Boolean, Int) -> Unit
+) {
+    var name by remember(profile, session) { mutableStateOf(profile?.name ?: session?.name.orEmpty()) }
+    var email by remember(profile, session) { mutableStateOf(profile?.email ?: session?.email.orEmpty()) }
+    var housing by remember(profile, session) { mutableStateOf(profile?.housingType ?: session?.housingType ?: "apartment") }
+    var children by remember(profile, session) { mutableStateOf(profile?.hasChildren ?: session?.hasChildren ?: false) }
+    var otherPets by remember(profile, session) { mutableStateOf(profile?.hasOtherPets ?: session?.hasOtherPets ?: false) }
+    var energy by remember(profile, session) { mutableFloatStateOf((profile?.energyBudget ?: session?.energyBudget ?: 3).toFloat()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Lifestyle preferences") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true)
+                Spacer(Modifier.height(12.dp))
+                Text("Home type", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("apartment" to "Apartment", "house_with_yard" to "House with yard").forEach { (value, label) ->
+                        if (housing == value) {
+                            Button(onClick = { housing = value }) { Text(label) }
+                        } else {
+                            OutlinedButton(onClick = { housing = value }) { Text(label) }
+                        }
+                    }
+                }
+                PreferenceSwitch("Children at home", children) { children = it }
+                PreferenceSwitch("Other pets at home", otherPets) { otherPets = it }
+                Text("Activity level: ${energy.toInt()}/5")
+                Slider(energy, onValueChange = { energy = it }, valueRange = 1f..5f, steps = 3)
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !saving,
+                onClick = { onSave(name, email, housing, children, otherPets, energy.toInt()) }
+            ) { Text(if (saving) "Saving…" else "Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun PreferenceSwitch(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,17 +42,26 @@ import com.pawfect.app.ui.viewmodel.MatchesViewModel
 @Composable
 fun MatchesScreen(
     onSelectPet: (String) -> Unit,
+    onApply: (String) -> Unit,
     onStartChat: () -> Unit,
+    savedOnly: Boolean = false,
     viewModel: MatchesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    LaunchedEffect(savedOnly) { viewModel.loadMatches(savedOnly) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Your Perfect Match", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        if (savedOnly) "Saved pets"
+                        else if (uiState.evaluationsByPetId.isNotEmpty()) "Your AI matches" else "Meet the pets",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 actions = {
-                    IconButton(onClick = { viewModel.loadMatches() }) {
+                    IconButton(onClick = { viewModel.loadMatches(savedOnly) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 },
@@ -69,6 +79,16 @@ fun MatchesScreen(
             ) {
                 CircularProgressIndicator()
             }
+        } else if (uiState.error != null) {
+            Column(
+                Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(uiState.error ?: "Something went wrong", textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { viewModel.loadMatches(savedOnly) }) { Text("Try again") }
+            }
         } else {
             val topPet = uiState.topMatch
 
@@ -84,16 +104,19 @@ fun MatchesScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         HeroMatchCard(
                             pet = topPet,
+                            matchScore = uiState.evaluationsByPetId[topPet.id]?.compatibilityScore,
                             isFavorited = topPet.id in uiState.savedPetIds,
                             onToggleFavorite = { viewModel.toggleFavorite(topPet.id) },
                             onLearnMore = { onSelectPet(topPet.id) },
-                            onAdoptMe = { onSelectPet(topPet.id) }
+                            onAdoptMe = { onApply(topPet.id) }
                         )
                     }
 
                     item {
                         Text(
-                            text = "Other High Compatibility Matches",
+                            text = if (savedOnly) "Your saved companions"
+                            else if (uiState.evaluationsByPetId.isNotEmpty()) "More matches for you"
+                            else "More companions",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
@@ -103,6 +126,7 @@ fun MatchesScreen(
                     items(uiState.otherMatches) { pet ->
                         CompactPetCard(
                             pet = pet,
+                            matchScore = uiState.evaluationsByPetId[pet.id]?.compatibilityScore,
                             isFavorited = pet.id in uiState.savedPetIds,
                             onToggleFavorite = { viewModel.toggleFavorite(pet.id) },
                             onClick = { onSelectPet(pet.id) }
@@ -117,12 +141,18 @@ fun MatchesScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("No matches yet!", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    if (savedOnly) "No saved pets yet" else "No pets to show right now",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text("Chat with our AI counselor to discover pets that fit your lifestyle.")
+                                Text(
+                                    if (savedOnly) "Tap the heart on a pet profile to save it here."
+                                    else "Try refreshing or chat with our AI counselor to find a thoughtful match."
+                                )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Button(onClick = onStartChat) {
-                                    Text("Start Counseling Chat")
+                                    Text(if (savedOnly) "Find a companion" else "Start a conversation")
                                 }
                             }
                         }
@@ -140,6 +170,7 @@ fun MatchesScreen(
 @Composable
 fun HeroMatchCard(
     pet: PetDto,
+    matchScore: Int?,
     isFavorited: Boolean,
     onToggleFavorite: () -> Unit,
     onLearnMore: () -> Unit,
@@ -159,7 +190,7 @@ fun HeroMatchCard(
                     .height(240.dp)
             ) {
                 AsyncImage(
-                    model = pet.photoUrl ?: "https://images.unsplash.com/photo-1552053831-71594a27632d",
+                    model = pet.photoUrl,
                     contentDescription = pet.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -182,18 +213,18 @@ fun HeroMatchCard(
                 }
 
                 // Circular Match Score Gauge [FROM MARKDOWN: Screen 4 - e.g. 96%]
-                Surface(
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.95f),
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(12.dp)
-                ) {
-                    CircularMatchGauge(
-                        score = 96,
-                        size = 72.dp,
-                        strokeWidth = 6.dp
-                    )
+                if (matchScore != null) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.95f),
+                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
+                    ) {
+                        CircularMatchGauge(
+                            score = matchScore,
+                            size = 72.dp,
+                            strokeWidth = 6.dp
+                        )
+                    }
                 }
             }
 
@@ -221,7 +252,8 @@ fun HeroMatchCard(
 
                 // Lifestyle Checkmarks [FROM MARKDOWN: Screen 4]
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    LifestyleCheckItem(text = "Matches your energy level (${pet.energyLevel}/5)")
+                    if (matchScore != null) LifestyleCheckItem(text = "AI compatibility: $matchScore%")
+                    LifestyleCheckItem(text = "Energy level: ${pet.energyLevel}/5")
                     if (pet.goodWithKids) LifestyleCheckItem(text = "Safe & affectionate with children")
                     if (pet.goodWithOtherPets) LifestyleCheckItem(text = "Socialized with other pets")
                     LifestyleCheckItem(text = "Suitable for ${pet.housingRequirement.replace('_', ' ')}")
@@ -299,6 +331,7 @@ fun LifestyleCheckItem(text: String) {
 @Composable
 fun CompactPetCard(
     pet: PetDto,
+    matchScore: Int? = null,
     isFavorited: Boolean,
     onToggleFavorite: () -> Unit,
     onClick: () -> Unit
@@ -317,7 +350,7 @@ fun CompactPetCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = pet.photoUrl ?: "https://images.unsplash.com/photo-1552053831-71594a27632d",
+                model = pet.photoUrl,
                 contentDescription = pet.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -330,6 +363,14 @@ fun CompactPetCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(pet.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("${pet.breed} • ${pet.gender}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                if (matchScore != null) {
+                    Text(
+                        "$matchScore% match",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MatchGreen,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = pet.temperament.take(2).joinToString(" • "),

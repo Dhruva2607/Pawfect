@@ -5,20 +5,20 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- usesCleartextTraffic="true" routes local emulator traffic via http://10.0.2.2:8000/ [FROM MARKDOWN: Section 4] -->
     <application
         android:name=".PawFectApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="PawFect"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.PawFect"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="${usesCleartextTraffic}">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.PawFect">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -28,4 +28,3 @@
     </application>
 
 </manifest>
-

@@ -1,12 +1,29 @@
 package com.pawfect.app.data.repository
 
 import com.pawfect.app.data.model.*
+import com.pawfect.app.data.local.SessionManager
 import com.pawfect.app.data.remote.PawFectApiService
 import com.pawfect.app.data.remote.PawFectSseClient
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
+
+@Singleton
+class AuthRepository @Inject constructor(
+    private val apiService: PawFectApiService,
+    private val sessionManager: SessionManager
+) {
+    fun currentSession() = sessionManager.currentSession()
+
+    suspend fun login(request: AuthRequestDto): AuthResponseDto =
+        apiService.login(request).also(sessionManager::saveSession)
+
+    suspend fun signup(request: AuthRequestDto): AuthResponseDto =
+        apiService.signup(request).also(sessionManager::saveSession)
+
+    fun logout() = sessionManager.logout()
+}
 
 /**
  * Pet Repository: fetches static pet details and user favorites.
@@ -39,6 +56,11 @@ class PetRepository @Inject constructor(
     suspend fun getUserProfile(userId: String): UserProfileDto {
         return apiService.getUserProfile(userId)
     }
+
+    suspend fun updateUserProfile(
+        userId: String,
+        request: UserProfileUpdateDto
+    ): UserProfileDto = apiService.updateUserProfile(userId, request)
 }
 
 /**
@@ -58,6 +80,7 @@ class ChatRepository @Inject constructor(
     suspend fun sendChatMessage(sessionId: String, message: String, userId: String? = null): ChatResponseDto {
         return apiService.sendChatMessage(ChatRequestDto(sessionId, message, userId, stream = false))
     }
+
 }
 
 /**
@@ -76,4 +99,3 @@ class AdoptionRepository @Inject constructor(
         return apiService.getAdoptionStatus(applicationId)
     }
 }
-

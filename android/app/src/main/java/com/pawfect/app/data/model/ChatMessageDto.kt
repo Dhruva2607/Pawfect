@@ -31,6 +31,12 @@ data class PetEvaluationDto(
     @SerialName("reasoning_summary") val reasoningSummary: String
 )
 
+@Serializable
+data class StoredMatchResults(
+    @SerialName("candidate_matches") val candidateMatches: List<PetDto> = emptyList(),
+    val evaluations: List<PetEvaluationDto> = emptyList()
+)
+
 sealed class SseChatEvent {
     data class Typing(val status: String) : SseChatEvent()
     data class Token(val token: String) : SseChatEvent()
@@ -39,4 +45,3 @@ sealed class SseChatEvent {
     data class Done(val responseMessage: String, val isComplete: Boolean) : SseChatEvent()
     data class Error(val throwable: Throwable) : SseChatEvent()
 }
-

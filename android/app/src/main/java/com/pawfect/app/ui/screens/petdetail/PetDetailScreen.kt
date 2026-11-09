@@ -69,17 +69,17 @@ fun PetDetailScreen(
                                 .weight(1f)
                                 .height(52.dp)
                         ) {
-                            Text("Compatibility 🔍")
+                            Text("My fit")
                         }
 
                         Button(
-                            onClick = onStartAdoptionChat,
+                            onClick = onApply,
                             modifier = Modifier
                                 .weight(1.3f)
                                 .height(52.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
-                            Text("Start Adoption Chat 💬")
+                            Text("Apply to adopt")
                         }
                     }
                 }
@@ -87,7 +87,7 @@ fun PetDetailScreen(
         },
         containerColor = BackgroundWarm
     ) { paddingValues ->
-        if (uiState.isLoading || pet == null) {
+        if (uiState.isLoading && pet == null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -95,6 +95,16 @@ fun PetDetailScreen(
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator()
+            }
+        } else if (pet == null) {
+            Column(
+                Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(uiState.error ?: "This pet could not be loaded.")
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { viewModel.loadPet(petId) }) { Text("Try again") }
             }
         } else {
             Column(
@@ -110,7 +120,7 @@ fun PetDetailScreen(
                         .height(320.dp)
                 ) {
                     AsyncImage(
-                        model = pet.photoUrl ?: "https://images.unsplash.com/photo-1552053831-71594a27632d",
+                        model = pet.photoUrl,
                         contentDescription = pet.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -168,7 +178,11 @@ fun PetDetailScreen(
                             color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
-                                text = "${pet.ageMonths} mos old",
+                                text = if (pet.ageMonths >= 12) {
+                                    "${pet.ageMonths / 12} yr ${pet.ageMonths % 12} mo"
+                                } else {
+                                    "${pet.ageMonths} months"
+                                },
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
@@ -241,6 +255,15 @@ fun PetDetailScreen(
                         pet.triggers.forEach { trigger ->
                             Text("• $trigger", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFDC2626))
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = onStartAdoptionChat,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Text("Ask the AI matchmaker about ${pet.name}")
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))

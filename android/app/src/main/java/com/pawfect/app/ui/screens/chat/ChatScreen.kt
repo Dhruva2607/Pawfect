@@ -11,8 +11,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -88,6 +88,21 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            if (uiState.error != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        uiState.error.orEmpty(),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
             // Dialogue message history
             LazyColumn(
                 state = listState,
@@ -104,8 +119,10 @@ fun ChatScreen(
                 // If candidate matches are ready, display top match banner card
                 if (uiState.candidateMatches.isNotEmpty() && uiState.evaluations.isNotEmpty()) {
                     item {
-                        val topMatch = uiState.candidateMatches.first()
                         val topEval = uiState.evaluations.first()
+                        val topMatch = uiState.candidateMatches.firstOrNull {
+                            it.id == topEval.petId
+                        } ?: uiState.candidateMatches.first()
 
                         Card(
                             modifier = Modifier
@@ -149,14 +166,25 @@ fun ChatScreen(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                Button(
-                                    onClick = { onViewPetDetail(topMatch.id) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                ) {
-                                    Text("View ${topMatch.name}'s Profile")
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Button(
+                                        onClick = { onViewPetDetail(topMatch.id) },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text("Meet ${topMatch.name}")
+                                    }
+                                    OutlinedButton(
+                                        onClick = { onViewCompatibility(topMatch.id) },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Why this match?")
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = null,
+                                            modifier = Modifier.padding(start = 4.dp).size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -206,6 +234,7 @@ fun ChatScreen(
                     OutlinedTextField(
                         value = inputMessage,
                         onValueChange = { inputMessage = it },
+                        enabled = !uiState.isTyping,
                         modifier = Modifier.weight(1f),
                         placeholder = { Text("Describe your home, routine, kids...") },
                         maxLines = 3,
@@ -225,12 +254,13 @@ fun ChatScreen(
                                 inputMessage = ""
                             }
                         },
+                        enabled = !uiState.isTyping && inputMessage.isNotBlank(),
                         modifier = Modifier
                             .size(48.dp)
                             .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Send,
+                            imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send",
                             tint = Color.White
                         )
