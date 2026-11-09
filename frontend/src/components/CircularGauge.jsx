@@ -47,3 +47,4 @@ export default function CircularGauge({ score = 95, size = 80, strokeWidth = 7 }
     </div>
   );
 }
+

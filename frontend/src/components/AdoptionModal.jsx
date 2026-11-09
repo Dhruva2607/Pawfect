@@ -240,3 +240,4 @@ export default function AdoptionModal({ pet, isOpen, onClose }) {
     </div>
   );
 }
+

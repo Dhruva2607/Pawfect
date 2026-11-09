@@ -224,3 +224,4 @@ export default function CompatibilityModal({ pet, isOpen, onClose, onContinueAdo
     </div>
   );
 }
+

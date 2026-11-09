@@ -22,6 +22,28 @@ class FavoriteToggleResponse(BaseModel):
     saved_pets_count: int
 
 
+class AuthRequest(BaseModel):
+    email: str
+    password: Optional[str] = "password123"
+    name: Optional[str] = None
+    housing_type: Optional[str] = "apartment"
+    has_children: Optional[bool] = True
+    has_other_pets: Optional[bool] = False
+    energy_budget: Optional[int] = 3
+
+
+class AuthResponse(BaseModel):
+    user_id: str
+    name: str
+    email: str
+    token: str
+    housing_type: Optional[str] = None
+    has_children: Optional[bool] = None
+    has_other_pets: Optional[bool] = None
+    energy_budget: Optional[int] = None
+    saved_pets: List[str] = []
+
+
 class UserProfileUpdateRequest(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
@@ -46,6 +68,64 @@ async def _get_or_create_user(user_id: str) -> dict:
         await db["user_profiles"].insert_one(default_user.model_dump(by_alias=True))
         user_doc = default_user.model_dump(by_alias=True)
     return user_doc
+
+
+@router.post("/auth/login", response_model=AuthResponse, summary="User Sign In")
+async def user_login(req: AuthRequest):
+    db = get_async_db()
+    clean_id = "user_" + req.email.split("@")[0].replace(".", "_")
+    user_doc = await db["user_profiles"].find_one({"$or": [{"email": req.email}, {"_id": clean_id}]})
+    if not user_doc:
+        user_doc = await _get_or_create_user(clean_id)
+        await db["user_profiles"].update_one(
+            {"_id": clean_id},
+            {"$set": {"email": req.email, "name": req.name or req.email.split("@")[0].capitalize()}}
+        )
+        user_doc = await db["user_profiles"].find_one({"_id": clean_id})
+
+    return AuthResponse(
+        user_id=user_doc["_id"],
+        name=user_doc.get("name") or "Adopter",
+        email=user_doc.get("email") or req.email,
+        token="token_" + user_doc["_id"],
+        housing_type=user_doc.get("housing_type", "apartment"),
+        has_children=user_doc.get("has_children", True),
+        has_other_pets=user_doc.get("has_other_pets", False),
+        energy_budget=user_doc.get("energy_budget", 3),
+        saved_pets=user_doc.get("saved_pets", [])
+    )
+
+
+@router.post("/auth/signup", response_model=AuthResponse, summary="User Sign Up")
+async def user_signup(req: AuthRequest):
+    db = get_async_db()
+    clean_id = "user_" + req.email.split("@")[0].replace(".", "_")
+    profile = UserProfile(
+        id=clean_id,
+        name=req.name or req.email.split("@")[0].capitalize(),
+        email=req.email,
+        housing_type=req.housing_type or "apartment",
+        has_children=req.has_children if req.has_children is not None else True,
+        has_other_pets=req.has_other_pets if req.has_other_pets is not None else False,
+        energy_budget=req.energy_budget or 3,
+        saved_pets=[]
+    )
+    await db["user_profiles"].update_one(
+        {"_id": clean_id},
+        {"$set": profile.model_dump(by_alias=True)},
+        upsert=True
+    )
+    return AuthResponse(
+        user_id=clean_id,
+        name=profile.name,
+        email=profile.email,
+        token="token_" + clean_id,
+        housing_type=profile.housing_type,
+        has_children=profile.has_children,
+        has_other_pets=profile.has_other_pets,
+        energy_budget=profile.energy_budget,
+        saved_pets=[]
+    )
 
 
 @router.get("/{id}/profile", response_model=UserProfile, summary="Get User Profile")

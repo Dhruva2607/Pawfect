@@ -5,21 +5,34 @@ import PetCard from './components/PetCard';
 import PetDetailModal from './components/PetDetailModal';
 import CompatibilityModal from './components/CompatibilityModal';
 import AdoptionModal from './components/AdoptionModal';
-import { listPets, getSavedPets, toggleFavorite, getAdoptionStatus } from './services/api';
-import { Search, SlidersHorizontal, Heart, Sparkles, Home, Shield, AlertCircle, RefreshCw, PawPrint, CheckCircle2 } from 'lucide-react';
+import AuthModal from './components/AuthModal';
+import { SAMPLE_PETS } from './data/samplePets';
+import { listPets, getSavedPets, toggleFavorite } from './services/api';
+import { Search, Heart, Sparkles, Shield, AlertCircle, RefreshCw, PawPrint, LogIn, Lock } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'explore' | 'saved' | 'profile'
+  const [activeTab, setActiveTab] = useState('explore'); // 'explore' | 'chat' | 'saved' | 'profile'
   
-  // Pet catalog state
-  const [pets, setPets] = useState([]);
+  // Authentication state
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('pawfect_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authTriggerReason, setAuthTriggerReason] = useState(null);
+
+  // Pet catalog state (initialized with SAMPLE_PETS so pets are never missing!)
+  const [pets, setPets] = useState(SAMPLE_PETS);
   const [savedPetIds, setSavedPetIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [isLiveBackend, setIsLiveBackend] = useState(false);
 
   // Filters state
   const [speciesFilter, setSpeciesFilter] = useState('all'); // 'all' | 'dog' | 'cat'
-  const [sizeFilter, setSizeFilter] = useState('all'); // 'all' | 'small' | 'medium' | 'large'
   const [kidsOnly, setKidsOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -28,50 +41,74 @@ export default function App() {
   const [compatPet, setCompatPet] = useState(null);
   const [adoptPet, setAdoptPet] = useState(null);
 
-  // Profile / Adoption applications state
-  const [trackedApplications, setTrackedApplications] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pawfect_applications');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // Load pets and saved favorites on mount
+  // Load live pets from backend on mount or when user changes
   useEffect(() => {
-    loadData();
-  }, []);
+    loadLivePets();
+    if (user) {
+      loadSavedPets(user.user_id || user.id);
+    }
+  }, [user]);
 
-  const loadData = async () => {
+  const loadLivePets = async () => {
     setLoading(true);
-    setError(null);
     try {
-      const [petsData, savedData] = await Promise.allSettled([
-        listPets(),
-        getSavedPets('user_default')
-      ]);
-
-      if (petsData.status === 'fulfilled') {
-        setPets(petsData.value.pets || []);
+      const fetched = await listPets();
+      if (Array.isArray(fetched) && fetched.length > 0) {
+        setPets(fetched);
+        setIsLiveBackend(true);
       } else {
-        throw new Error('Failed to load pets from backend');
-      }
-
-      if (savedData.status === 'fulfilled') {
-        const ids = new Set((savedData.value.saved_pets || []).map(p => p._id || p.id));
-        setSavedPetIds(ids);
+        // Fallback to sample pets if empty
+        setPets(SAMPLE_PETS);
       }
     } catch (err) {
-      console.error(err);
-      setError('Could not connect to PawFect backend at http://localhost:8000. Ensure the FastAPI server is running.');
+      console.warn('Backend API not responding; using bundled sample pets catalog.', err);
+      setPets(SAMPLE_PETS);
+      setIsLiveBackend(false);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadSavedPets = async (userId) => {
+    try {
+      const saved = await getSavedPets(userId);
+      const ids = new Set((saved || []).map(p => p._id || p.id));
+      setSavedPetIds(ids);
+    } catch (e) {
+      console.warn('Could not load saved pets:', e);
+    }
+  };
+
+  const handleAuthSuccess = (userData) => {
+    setUser(userData);
+    localStorage.setItem('pawfect_user', JSON.stringify(userData));
+    setIsAuthOpen(false);
+    setAuthTriggerReason(null);
+    loadSavedPets(userData.user_id || userData.id);
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('pawfect_user');
+    setSavedPetIds(new Set());
+    setActiveTab('explore');
+  };
+
+  // Guard for protected specialties
+  const requireAuth = (featureName, callback) => {
+    if (!user) {
+      setAuthTriggerReason(featureName);
+      setIsAuthOpen(true);
+      return false;
+    }
+    if (callback) callback();
+    return true;
+  };
+
   const handleToggleFavorite = async (petId) => {
-    // Optimistic toggle
+    if (!requireAuth('Saving Favorite Pets')) return;
+
+    const userId = user.user_id || user.id || 'user_default';
     setSavedPetIds(prev => {
       const next = new Set(prev);
       if (next.has(petId)) {
@@ -83,24 +120,27 @@ export default function App() {
     });
 
     try {
-      await toggleFavorite('user_default', petId);
+      await toggleFavorite(userId, petId);
     } catch (err) {
       console.error('Error toggling favorite:', err);
     }
   };
 
-  const handleOpenAdoption = (pet) => {
-    setAdoptPet(pet);
-  };
-
-  const handleOpenCompatibility = (pet) => {
-    setCompatPet(pet);
+  const handleTabChange = (tabId) => {
+    if (tabId === 'chat' && !user) {
+      requireAuth('AI Matchmaker Counselor', () => setActiveTab('chat'));
+      return;
+    }
+    if (tabId === 'saved' && !user) {
+      requireAuth('Saved Pets', () => setActiveTab('saved'));
+      return;
+    }
+    setActiveTab(tabId);
   };
 
   // Filtered pets list
   const filteredPets = pets.filter(pet => {
-    if (speciesFilter !== 'all' && pet.species !== speciesFilter) return false;
-    if (sizeFilter !== 'all' && pet.size !== sizeFilter) return false;
+    if (speciesFilter !== 'all' && pet.species?.toLowerCase() !== speciesFilter.toLowerCase()) return false;
     if (kidsOnly && !pet.good_with_kids) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -113,80 +153,77 @@ export default function App() {
     return true;
   });
 
-  // Saved pets list
   const savedPetsList = pets.filter(p => savedPetIds.has(p._id || p.id));
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-stone-800 flex flex-col font-sans">
-      {/* Minimal Top Header */}
+      {/* Top Header Navbar */}
       <Navbar 
         activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+        setActiveTab={handleTabChange} 
         savedCount={savedPetIds.size} 
+        user={user}
+        onOpenAuth={() => { setAuthTriggerReason(null); setIsAuthOpen(true); }}
+        onLogout={handleLogout}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        
-        {/* Error notification if backend unavailable */}
-        {error && (
-          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between text-sm">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-              <span>{error}</span>
+      {/* Guest Banner if not signed in */}
+      {!user && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-xs text-amber-900 flex items-center justify-between">
+          <div className="max-w-6xl mx-auto w-full flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <span>
+                <strong>Browsing as Guest.</strong> Sign in to chat with the AI counselor, evaluate compatibility, and save favorites.
+              </span>
             </div>
-            <button 
-              onClick={loadData}
-              className="px-3 py-1.5 bg-amber-200/70 hover:bg-amber-200 rounded-xl font-medium text-xs transition-colors flex items-center gap-1.5"
+            <button
+              onClick={() => { setAuthTriggerReason('Sign In'); setIsAuthOpen(true); }}
+              className="ml-3 font-bold underline hover:text-amber-800 whitespace-nowrap"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Retry
+              Sign In / Sign Up →
             </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* TAB 1: AI MATCHMAKER CHAT */}
-        {activeTab === 'chat' && (
-          <div className="animate-fade-in">
-            <div className="mb-6">
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-stone-900">
-                AI Pet Counselor
-              </h1>
-              <p className="text-sm text-stone-500 mt-1">
-                Conversational matchmaking powered by LangGraph, MongoDB Vector Search, and Gemini 2026.
-              </p>
-            </div>
-            
-            <ChatCounselor 
-              onViewPet={(pet) => setDetailPet(pet)}
-              onAdoptPet={(pet) => setAdoptPet(pet)}
-            />
-          </div>
-        )}
-
-        {/* TAB 2: EXPLORE PETS CATALOG */}
+      {/* Main Content Container */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        
+        {/* TAB 1: EXPLORE PETS CATALOG (Default Landing) */}
         {activeTab === 'explore' && (
           <div className="animate-fade-in space-y-6">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-stone-900">
-                Meet Available Pets
-              </h1>
-              <p className="text-sm text-stone-500 mt-1">
-                Browse our verified shelter pets waiting for their forever home.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
+                  Available Shelter Pets
+                </h1>
+                <p className="text-sm text-stone-500 mt-1">
+                  Discover loving companions ready for adoption. {isLiveBackend ? '• Live MongoDB Atlas catalog' : '• Sample catalog'}
+                </p>
+              </div>
+
+              {/* AI Counselor Banner CTA */}
+              <button
+                onClick={() => handleTabChange('chat')}
+                className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-sm transition-all"
+              >
+                <Sparkles className="w-4 h-4 text-amber-200" />
+                Ask AI Pet Counselor
+              </button>
             </div>
 
             {/* Filter Bar */}
-            <div className="bg-white p-4 rounded-2xl border border-stone-200/70 shadow-sm space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
+            <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-stone-200/80 shadow-xs space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
               {/* Search */}
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Search by name, breed, or temperament..."
+                  placeholder="Search by breed, name (e.g. Buddy, Luna), or temperament..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-stone-50 rounded-xl text-sm border-0 focus:ring-2 focus:ring-amber-500/20 text-stone-800 placeholder-stone-400"
+                  className="w-full pl-9 pr-4 py-2 bg-stone-50 rounded-xl text-xs sm:text-sm border-0 focus:ring-2 focus:ring-amber-500/20 text-stone-800 placeholder-stone-400"
                 />
               </div>
 
@@ -198,11 +235,11 @@ export default function App() {
                     onClick={() => setSpeciesFilter(spec)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
                       speciesFilter === spec
-                        ? 'bg-white text-stone-900 shadow-sm'
+                        ? 'bg-white text-stone-900 shadow-xs'
                         : 'text-stone-500 hover:text-stone-900'
                     }`}
                   >
-                    {spec === 'all' ? 'All Species' : spec === 'dog' ? '🐶 Dogs' : '🐱 Cats'}
+                    {spec === 'all' ? 'All Pets' : spec === 'dog' ? '🐶 Dogs' : '🐱 Cats'}
                   </button>
                 ))}
               </div>
@@ -219,22 +256,17 @@ export default function App() {
               </label>
             </div>
 
-            {/* Grid */}
-            {loading ? (
-              <div className="py-20 text-center text-stone-400 text-sm">
-                <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                Loading pet catalog...
-              </div>
-            ) : filteredPets.length === 0 ? (
+            {/* Pets Grid */}
+            {filteredPets.length === 0 ? (
               <div className="py-16 text-center bg-white rounded-2xl border border-stone-200/60 p-8">
                 <PawPrint className="w-10 h-10 text-stone-300 mx-auto mb-3" />
                 <h3 className="font-medium text-stone-700">No pets match your criteria</h3>
                 <p className="text-xs text-stone-400 mt-1">Try resetting filters or expanding your search</p>
                 <button
-                  onClick={() => { setSpeciesFilter('all'); setSizeFilter('all'); setKidsOnly(false); setSearchQuery(''); }}
+                  onClick={() => { setSpeciesFilter('all'); setKidsOnly(false); setSearchQuery(''); }}
                   className="mt-4 px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium rounded-xl transition-colors"
                 >
-                  Reset all filters
+                  Reset filters
                 </button>
               </div>
             ) : (
@@ -246,7 +278,11 @@ export default function App() {
                     isFavorite={savedPetIds.has(pet._id || pet.id)}
                     onToggleFavorite={handleToggleFavorite}
                     onViewDetails={() => setDetailPet(pet)}
-                    onCheckCompatibility={() => handleOpenCompatibility(pet)}
+                    onCheckCompatibility={() => {
+                      if (requireAuth('Compatibility Diagnostic', () => setCompatPet(pet))) {
+                        setCompatPet(pet);
+                      }
+                    }}
                   />
                 ))}
               </div>
@@ -254,30 +290,56 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB 2: AI MATCHMAKER CHAT */}
+        {activeTab === 'chat' && (
+          <div className="animate-fade-in">
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 flex items-center gap-2">
+                  <span>AI Pet Adoption Counselor</span>
+                  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-medium">LangGraph Live</span>
+                </h1>
+                <p className="text-sm text-stone-500 mt-1">
+                  Chat conversationally about your living space, family, and schedule to receive AI recommendations.
+                </p>
+              </div>
+            </div>
+            
+            <ChatCounselor 
+              onViewPet={(pet) => setDetailPet(pet)}
+              onAdoptPet={(pet) => {
+                if (requireAuth('Adoption Application', () => setAdoptPet(pet))) {
+                  setAdoptPet(pet);
+                }
+              }}
+            />
+          </div>
+        )}
+
         {/* TAB 3: SAVED PETS */}
         {activeTab === 'saved' && (
           <div className="animate-fade-in space-y-6">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-stone-900">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
                 Your Saved Pets
               </h1>
               <p className="text-sm text-stone-500 mt-1">
-                Keep track of your favorite furry friends as you decide on adoption.
+                Your shortlisted companion animals for adoption consideration.
               </p>
             </div>
 
             {savedPetsList.length === 0 ? (
               <div className="py-20 text-center bg-white rounded-2xl border border-dashed border-stone-200 p-8">
                 <Heart className="w-12 h-12 text-stone-300 mx-auto mb-3" />
-                <h3 className="font-medium text-stone-800 text-base">No saved pets yet</h3>
+                <h3 className="font-semibold text-stone-800 text-base">No saved pets yet</h3>
                 <p className="text-xs text-stone-400 mt-1 max-w-sm mx-auto">
-                  Click the heart icon on any pet card in Explore or Chat to save them here for quick comparison.
+                  Click the heart icon on any pet card in Explore to save them here for side-by-side comparison.
                 </p>
                 <button
                   onClick={() => setActiveTab('explore')}
-                  className="mt-5 px-5 py-2.5 bg-stone-900 text-white text-xs font-medium rounded-xl hover:bg-stone-800 transition-colors shadow-sm"
+                  className="mt-5 px-5 py-2.5 bg-stone-900 text-white text-xs font-semibold rounded-xl hover:bg-stone-800 transition-colors shadow-sm"
                 >
-                  Explore Pets
+                  Browse Available Pets
                 </button>
               </div>
             ) : (
@@ -289,7 +351,7 @@ export default function App() {
                     isFavorite={true}
                     onToggleFavorite={handleToggleFavorite}
                     onViewDetails={() => setDetailPet(pet)}
-                    onCheckCompatibility={() => handleOpenCompatibility(pet)}
+                    onCheckCompatibility={() => setCompatPet(pet)}
                   />
                 ))}
               </div>
@@ -301,78 +363,126 @@ export default function App() {
         {activeTab === 'profile' && (
           <div className="animate-fade-in space-y-6 max-w-3xl">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-stone-900">
-                Adopter Profile
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
+                Adopter Profile Hub
               </h1>
               <p className="text-sm text-stone-500 mt-1">
-                Your lifestyle profile used by the AI counselor to calculate compatibility.
+                Manage your lifestyle preferences used by the AI matcher.
               </p>
             </div>
 
-            {/* Profile Summary Card */}
-            <div className="bg-white rounded-2xl border border-stone-200/70 p-6 shadow-sm space-y-6">
-              <div className="flex items-center gap-4 pb-6 border-b border-stone-100">
-                <div className="w-14 h-14 rounded-2xl bg-amber-100/70 text-amber-700 flex items-center justify-center text-xl font-bold">
-                  JD
-                </div>
-                <div>
-                  <h3 className="font-semibold text-stone-900 text-lg">Jane Doe</h3>
-                  <p className="text-xs text-stone-500">ID: user_default • Active Searcher</p>
-                </div>
-              </div>
+            {user ? (
+              <div className="space-y-6">
+                {/* Profile Card */}
+                <div className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-xs space-y-6">
+                  <div className="flex items-center justify-between pb-6 border-b border-stone-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-700 flex items-center justify-center text-xl font-bold border border-amber-500/20">
+                        {(user.name || user.email || 'U')[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-stone-900 text-lg">{user.name || 'Adopter'}</h3>
+                        <p className="text-xs text-stone-500">{user.email} • ID: {user.user_id || user.id}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="px-3 py-1.5 text-xs text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-lg transition-colors"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
-                  <span className="text-[11px] text-stone-400 block font-medium uppercase tracking-wider">Housing</span>
-                  <span className="text-sm font-semibold text-stone-800 mt-0.5 block">Apartment (Balcony)</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
+                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Housing</span>
+                      <span className="text-xs font-semibold text-stone-800 mt-1 block capitalize">
+                        {(user.housing_type || 'apartment').replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
+                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Children</span>
+                      <span className="text-xs font-semibold text-stone-800 mt-1 block">
+                        {user.has_children ? 'Yes (Kids at home)' : 'No children'}
+                      </span>
+                    </div>
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
+                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Resident Pets</span>
+                      <span className="text-xs font-semibold text-stone-800 mt-1 block">
+                        {user.has_other_pets ? 'Yes (Other pets)' : 'None'}
+                      </span>
+                    </div>
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
+                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Energy Budget</span>
+                      <span className="text-xs font-semibold text-stone-800 mt-1 block">
+                        {user.energy_budget || 3}/5 Active
+                      </span>
+                    </div>
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
+                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Saved Pets</span>
+                      <span className="text-xs font-semibold text-amber-700 mt-1 block">
+                        {savedPetIds.size} Pets
+                      </span>
+                    </div>
+                    <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
+                      <span className="text-[10px] text-stone-400 block font-semibold uppercase tracking-wider">Status</span>
+                      <span className="text-xs font-semibold text-emerald-700 mt-1 block">
+                        Ready to Adopt
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
-                  <span className="text-[11px] text-stone-400 block font-medium uppercase tracking-wider">Fenced Yard</span>
-                  <span className="text-sm font-semibold text-stone-800 mt-0.5 block">No Yard</span>
-                </div>
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
-                  <span className="text-[11px] text-stone-400 block font-medium uppercase tracking-wider">Activity Level</span>
-                  <span className="text-sm font-semibold text-stone-800 mt-0.5 block">Moderate (3/5)</span>
-                </div>
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
-                  <span className="text-[11px] text-stone-400 block font-medium uppercase tracking-wider">Children</span>
-                  <span className="text-sm font-semibold text-stone-800 mt-0.5 block">1 Child (6 yrs)</span>
-                </div>
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
-                  <span className="text-[11px] text-stone-400 block font-medium uppercase tracking-wider">Resident Pets</span>
-                  <span className="text-sm font-semibold text-stone-800 mt-0.5 block">None</span>
-                </div>
-                <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-100">
-                  <span className="text-[11px] text-stone-400 block font-medium uppercase tracking-wider">Experience</span>
-                  <span className="text-sm font-semibold text-stone-800 mt-0.5 block">First-time Owner</span>
-                </div>
-              </div>
-            </div>
 
-            {/* Architecture Details Card */}
-            <div className="bg-stone-900 text-stone-300 rounded-2xl p-6 shadow-sm text-xs space-y-3">
-              <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
-                <Shield className="w-4 h-4" />
-                PawFect System Telemetry
+                {/* Telemetry card */}
+                <div className="bg-stone-900 text-stone-300 rounded-2xl p-6 shadow-xs text-xs space-y-3">
+                  <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
+                    <Shield className="w-4 h-4" />
+                    PawFect System Status
+                  </div>
+                  <p className="leading-relaxed text-stone-400">
+                    Connected to FastAPI backend with MongoDB Atlas Vector Search index (<code className="text-amber-300">vector_index</code>) 
+                    and LangGraph Multi-Turn State Graph persistence.
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">REST: /api/v1 Active</span>
+                    <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">Catalog: {pets.length} Available</span>
+                    <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">SSE Streaming: Enabled</span>
+                  </div>
+                </div>
               </div>
-              <p className="leading-relaxed text-stone-400">
-                Connected to FastAPI backend with MongoDB Atlas Vector Search index (<code className="text-amber-300">vector_index</code>) 
-                and LangGraph Multi-Turn State Graph persistence via MongoDBSaver checkpointer.
-              </p>
-              <div className="flex flex-wrap gap-2 pt-2">
-                <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">REST: 10 Endpoints Active</span>
-                <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">SSE: Streaming SSE /chat/message</span>
-                <span className="bg-stone-800 text-stone-300 px-2.5 py-1 rounded-lg">Embeddings: 768-dim</span>
+            ) : (
+              <div className="bg-white rounded-2xl border border-stone-200/80 p-8 text-center space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto text-xl">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <h3 className="font-bold text-stone-800 text-lg">Sign in to view your profile</h3>
+                <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                  Create an account or sign in to customize your home environment parameters and track your adoption applications.
+                </p>
+                <button
+                  onClick={() => setIsAuthOpen(true)}
+                  className="px-6 py-2.5 bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold rounded-xl transition-all shadow-sm inline-flex items-center gap-2"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Sign In or Create Account
+                </button>
               </div>
-            </div>
+            )}
           </div>
         )}
       </main>
 
       {/* FOOTER */}
       <footer className="border-t border-stone-200/60 py-6 text-center text-xs text-stone-400">
-        <p>PawFect © 2026 — AI-Powered Pet Matchmaker. Built with Jetpack Compose & React.</p>
+        <p>PawFect © 2026 — AI Pet Matchmaker. Built with Jetpack Compose & React.</p>
       </footer>
+
+      {/* AUTHENTICATION / LOGIN / SIGN UP MODAL */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => { setIsAuthOpen(false); setAuthTriggerReason(null); }}
+        onAuthSuccess={handleAuthSuccess}
+      />
 
       {/* MODAL 1: PET DETAIL MODAL */}
       <PetDetailModal
@@ -383,11 +493,15 @@ export default function App() {
         onToggleFavorite={handleToggleFavorite}
         onCheckCompatibility={(pet) => {
           setDetailPet(null);
-          setCompatPet(pet);
+          if (requireAuth('Compatibility Diagnostic', () => setCompatPet(pet))) {
+            setCompatPet(pet);
+          }
         }}
         onStartAdoption={(pet) => {
           setDetailPet(null);
-          setAdoptPet(pet);
+          if (requireAuth('Adoption Application', () => setAdoptPet(pet))) {
+            setAdoptPet(pet);
+          }
         }}
       />
 
@@ -398,7 +512,9 @@ export default function App() {
         onClose={() => setCompatPet(null)}
         onContinueAdoption={(pet) => {
           setCompatPet(null);
-          setAdoptPet(pet);
+          if (requireAuth('Adoption Application', () => setAdoptPet(pet))) {
+            setAdoptPet(pet);
+          }
         }}
       />
 

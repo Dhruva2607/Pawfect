@@ -292,3 +292,4 @@ export default function ChatCounselor({ onViewPet, onAdoptPet }) {
     </div>
   );
 }
+
