@@ -230,10 +230,10 @@ def test_direct_evaluation_fallback_is_persisted(monkeypatch):
 
     class EvaluationsCollection:
         def __init__(self):
-            self.inserted = []
+            self.upserts = []
 
-        async def insert_one(self, record):
-            self.inserted.append(record)
+        async def update_one(self, query, update, upsert=False):
+            self.upserts.append((query, update, upsert))
 
     evaluations = EvaluationsCollection()
     db = FakeDatabase({"pets": PetsCollection(), "match_evaluations": evaluations})
@@ -252,9 +252,12 @@ def test_direct_evaluation_fallback_is_persisted(monkeypatch):
     ))
 
     assert response.pet_id == "pet-1"
-    assert len(evaluations.inserted) == 1
-    assert evaluations.inserted[0]["pet_id"] == "pet-1"
-    assert "_id" not in evaluations.inserted[0]
+    assert len(evaluations.upserts) == 1
+    query, update, upsert = evaluations.upserts[0]
+    assert query == {"session_id": "session-1", "pet_id": "pet-1"}
+    assert upsert is True
+    assert update["$set"]["pet_id"] == "pet-1"
+    assert "_id" not in update["$set"]
 
 
 def test_direct_evaluation_does_not_mask_persistence_failure(monkeypatch):
@@ -277,7 +280,7 @@ def test_direct_evaluation_does_not_mask_persistence_failure(monkeypatch):
             }
 
     class FailingEvaluationsCollection:
-        async def insert_one(self, record):
+        async def update_one(self, query, update, upsert=False):
             raise RuntimeError("Evaluation persistence failed")
 
     db = FakeDatabase({

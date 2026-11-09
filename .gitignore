@@ -61,5 +61,10 @@ android/app/build/
 android/local.properties
 android/*.iml
 *.hprof
+android/gradle_out.txt
+android/gradle/gradle-daemon-jvm.properties
+
+# --- Agent/tooling local config ---
+.commandcode/
 
 node_modules/

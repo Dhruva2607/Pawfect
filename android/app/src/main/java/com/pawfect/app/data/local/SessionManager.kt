@@ -33,7 +33,7 @@ class SessionManager @Inject constructor(
             name = preferences.getString(KEY_NAME, "").orEmpty(),
             email = preferences.getString(KEY_EMAIL, "").orEmpty(),
             token = token,
-            housingType = preferences.getString(KEY_HOUSING_TYPE, "apartment").orEmpty(),
+            housingType = preferences.getString(KEY_HOUSING_TYPE, null)?.takeIf { it.isNotBlank() } ?: "apartment",
             hasChildren = preferences.getBoolean(KEY_HAS_CHILDREN, false),
             hasOtherPets = preferences.getBoolean(KEY_HAS_OTHER_PETS, false),
             energyBudget = preferences.getInt(KEY_ENERGY_BUDGET, 3)
@@ -93,6 +93,8 @@ class SessionManager @Inject constructor(
             remove(KEY_CHAT_SESSION)
             remove(KEY_CONVERSATION)
             remove(KEY_MATCH_RESULTS)
+            remove(KEY_QUICK_REPLIES)
+            remove(KEY_CHAT_COMPLETE)
         }
     }
 
@@ -108,6 +110,18 @@ class SessionManager @Inject constructor(
         preferences.edit { putString(KEY_MATCH_RESULTS, value) }
     }
 
+    fun quickRepliesJson(): String? = preferences.getString(KEY_QUICK_REPLIES, null)
+
+    fun saveQuickRepliesJson(value: String) {
+        preferences.edit { putString(KEY_QUICK_REPLIES, value) }
+    }
+
+    fun isChatComplete(): Boolean = preferences.getBoolean(KEY_CHAT_COMPLETE, false)
+
+    fun saveChatComplete(value: Boolean) {
+        preferences.edit { putBoolean(KEY_CHAT_COMPLETE, value) }
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "pawfect_session"
         const val KEY_USER_ID = "user_id"
@@ -121,5 +135,7 @@ class SessionManager @Inject constructor(
         const val KEY_CHAT_SESSION = "chat_session"
         const val KEY_CONVERSATION = "conversation"
         const val KEY_MATCH_RESULTS = "match_results"
+        const val KEY_QUICK_REPLIES = "quick_replies"
+        const val KEY_CHAT_COMPLETE = "chat_complete"
     }
 }

@@ -57,12 +57,20 @@ def build_mql_prefilter(constraints: Dict[str, Any]) -> Dict[str, Any]:
     # Housing requirement filter
     housing = constraints.get("housing_type")
     if housing:
-        housing_clean = housing.lower()
-        if "apartment" in housing_clean:
+        housing_clean = housing.lower().replace(" ", "_")
+        if "apartment_or_house" in housing_clean:
+            # "Either is fine" - no housing restriction
+            pass
+        elif "apartment" in housing_clean:
             query["housing_requirement"] = {"$in": ["apartment", "apartment_or_house"]}
         elif "yard" in housing_clean:
             # Houses with yard can take apartment_or_house or house_with_yard
             query["housing_requirement"] = {"$in": ["apartment_or_house", "house_with_yard"]}
+
+    # Energy compatibility: allow at most one level above the adopter's budget
+    energy_budget = constraints.get("energy_budget")
+    if isinstance(energy_budget, int):
+        query["energy_level"] = {"$lte": min(5, energy_budget + 1)}
 
     # Hypoallergenic filter if allergies are flagged
     if constraints.get("allergies") is True:

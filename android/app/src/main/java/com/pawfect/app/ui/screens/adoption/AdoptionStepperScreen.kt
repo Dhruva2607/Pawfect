@@ -54,9 +54,20 @@ fun AdoptionStepperScreen(
     var householdMembers by remember { mutableStateOf(uiState.householdMembers) }
     var notes by remember { mutableStateOf(uiState.notes) }
 
-    LaunchedEffect(uiState.applicantName, uiState.applicantEmail) {
+    LaunchedEffect(
+        uiState.applicantName,
+        uiState.applicantEmail,
+        uiState.applicantPhone,
+        uiState.housingDetails,
+        uiState.householdMembers,
+        uiState.notes
+    ) {
         applicantName = uiState.applicantName
         applicantEmail = uiState.applicantEmail
+        applicantPhone = uiState.applicantPhone
+        housingDetails = uiState.housingDetails
+        householdMembers = uiState.householdMembers
+        notes = uiState.notes
     }
 
     Scaffold(
@@ -77,6 +88,7 @@ fun AdoptionStepperScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally

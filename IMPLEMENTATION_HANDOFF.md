@@ -24,12 +24,13 @@ Copy-Item backend\.env.example backend\.env
 notepad backend\.env
 ```
 
-Set the three values the backend actually reads:
+Set the four values the backend actually reads:
 
 ```dotenv
 GOOGLE_API_KEY=your-google-ai-studio-api-key
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-host>/?retryWrites=true&w=majority
 DATABASE_NAME=pawfect
+ALLOWED_ORIGINS=*
 ```
 
 | Variable | Required for | Current code behavior |
@@ -37,8 +38,9 @@ DATABASE_NAME=pawfect
 | `GOOGLE_API_KEY` | AI chat, embeddings, AI evaluations | Defaults to an empty string; provide a valid key for AI features. |
 | `MONGODB_URI` | Profiles, pets, adoptions, chat persistence, and readiness | Defaults to `mongodb://localhost:27017`. |
 | `DATABASE_NAME` | MongoDB database selection | Defaults to `pawfect`. Use the same name when creating the Atlas Vector Search index. |
+| `ALLOWED_ORIGINS` | CORS origin allowlist | Defaults to `*` (allow all). Set a comma-separated list to restrict browser origins. |
 
-`backend/app/config.py` calls `load_dotenv()` and reads only these three configuration variables. Start Uvicorn and seed commands with `backend/` as the working directory so `backend/.env` is found. `HOST`, `PORT`, and `DEBUG` are not read from the environment; pass the host and port to Uvicorn explicitly. The `.env` file contains secrets and must not be committed or shared.
+`backend/app/config.py` calls `load_dotenv()` and reads only these four configuration variables. Start Uvicorn and seed commands with `backend/` as the working directory so `backend/.env` is found. `HOST`, `PORT`, and `DEBUG` are not read from the environment; pass the host and port to Uvicorn explicitly. The `.env` file contains secrets and must not be committed or shared.
 
 For Atlas, create a database user, configure Network Access for the computer running the backend, and URL-encode special characters in the connection-string username/password. Atlas Vector Search is needed for the retrieval path. On startup and during seeding, the application attempts to set up the index named `vector_index`; if that is unsupported or fails, inspect the backend log and create the defined index manually using the JSON in the README or `backend/app/database/indexes.py`.
 

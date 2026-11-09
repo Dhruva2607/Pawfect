@@ -8,7 +8,7 @@ import asyncio
 import logging
 from typing import List, Dict, Any, Optional, AsyncGenerator
 from datetime import datetime, timezone
-from fastapi import APIRouter, Request, Header
+from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
@@ -37,15 +37,15 @@ class ChatMessageResponse(BaseModel):
     extracted_constraints: Dict[str, Any] = Field(default_factory=dict)
 
 
-async def _load_session_data(session_id: str) -> tuple[list, dict]:
-    """Retrieves conversation history and prior constraints from MongoDB user_sessions."""
+async def _load_session_data(session_id: str) -> tuple[list, dict, Optional[str]]:
+    """Retrieves conversation history, prior constraints, and owner from MongoDB user_sessions."""
     db = get_async_db()
     session_doc = await db["user_sessions"].find_one({"_id": session_id})
     if session_doc:
         history = session_doc.get("conversation_history", [])
         constraints = session_doc.get("extracted_constraints", {})
-        return history, constraints
-    return [], {}
+        return history, constraints, session_doc.get("user_id")
+    return [], {}, None
 
 
 async def _save_session_data(
@@ -63,21 +63,25 @@ async def _save_session_data(
     user_entry = {"role": "user", "content": user_message, "timestamp": now.isoformat()}
     bot_entry = {"role": "assistant", "content": bot_message, "timestamp": now.isoformat()}
 
+    set_fields: Dict[str, Any] = {
+        "extracted_constraints": constraints,
+        "state_checkpoint": checkpoint,
+        "updated_at": now,
+    }
+    if user_id:
+        set_fields["user_id"] = user_id
+
     await db["user_sessions"].update_one(
         {"_id": session_id},
         {
-            "$setOnInsert": {"user_id": user_id, "created_at": now},
+            "$setOnInsert": {"created_at": now},
             "$push": {
                 "conversation_history": {
                     "$each": [user_entry, bot_entry],
                     "$slice": -100
                 }
             },
-            "$set": {
-                "extracted_constraints": constraints,
-                "state_checkpoint": checkpoint,
-                "updated_at": now
-            }
+            "$set": set_fields
         },
         upsert=True
     )
@@ -206,7 +210,13 @@ async def send_chat_message(
     Handles incoming user messages through the LangGraph AI Counselor.
     Supports real-time SSE token streaming when stream=True or Accept: text/event-stream.
     """
-    history, prior_constraints = await _load_session_data(request_data.session_id)
+    history, prior_constraints, session_user_id = await _load_session_data(request_data.session_id)
+
+    if session_user_id and request_data.user_id and session_user_id != request_data.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This chat session belongs to a different user."
+        )
 
     wants_stream = request_data.stream or (accept and "text/event-stream" in accept)
 
@@ -223,26 +233,40 @@ async def send_chat_message(
 
     # Standard JSON flow
     loop = asyncio.get_running_loop()
-    result_state = await loop.run_in_executor(
-        None,
-        run_matchmaker_turn,
-        request_data.session_id,
-        request_data.message,
-        history,
-        prior_constraints
-    )
+    try:
+        result_state = await loop.run_in_executor(
+            None,
+            run_matchmaker_turn,
+            request_data.session_id,
+            request_data.message,
+            history,
+            prior_constraints
+        )
+    except Exception:
+        logger.exception("Chat turn failed for session %s.", request_data.session_id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The chat service could not process this message."
+        )
 
     response_text = result_state.get("response_message", "")
     updated_constraints = result_state.get("extracted_constraints", prior_constraints)
 
-    await _save_session_data(
-        session_id=request_data.session_id,
-        user_id=request_data.user_id,
-        user_message=request_data.message,
-        bot_message=response_text,
-        constraints=updated_constraints,
-        checkpoint={"is_complete": result_state.get("is_complete", False)}
-    )
+    try:
+        await _save_session_data(
+            session_id=request_data.session_id,
+            user_id=request_data.user_id,
+            user_message=request_data.message,
+            bot_message=response_text,
+            constraints=updated_constraints,
+            checkpoint={"is_complete": result_state.get("is_complete", False)}
+        )
+    except Exception:
+        logger.exception("Could not save chat session %s.", request_data.session_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The response could not be saved. Please try again."
+        )
 
     return ChatMessageResponse(
         session_id=request_data.session_id,

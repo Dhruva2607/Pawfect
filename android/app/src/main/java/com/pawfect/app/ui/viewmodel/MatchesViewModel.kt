@@ -24,7 +24,8 @@ data class MatchesUiState(
     val otherMatches: List<PetDto> = emptyList(),
     val evaluationsByPetId: Map<String, PetEvaluationDto> = emptyMap(),
     val savedPetIds: Set<String> = emptySet(),
-    val error: String? = null
+    val error: String? = null,
+    val actionError: String? = null
 )
 
 @HiltViewModel
@@ -34,12 +35,23 @@ class MatchesViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val userId get() = sessionManager.currentSession()?.userId.orEmpty()
+    private val userId: String? get() = sessionManager.currentSession()?.userId
     private val _uiState = MutableStateFlow(MatchesUiState())
     val uiState: StateFlow<MatchesUiState> = _uiState.asStateFlow()
 
     fun loadMatches(savedOnly: Boolean = false) {
-        _uiState.update { it.copy(isLoading = true, isSavedOnly = savedOnly, error = null) }
+        val currentUserId = userId
+        if (currentUserId == null) {
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isSavedOnly = savedOnly,
+                    error = "Sign in to view your matches."
+                )
+            }
+            return
+        }
+        _uiState.update { it.copy(isLoading = true, isSavedOnly = savedOnly, error = null, actionError = null) }
         viewModelScope.launch {
             try {
                 val storedMatches = runCatching {
@@ -47,7 +59,7 @@ class MatchesViewModel @Inject constructor(
                         json.decodeFromString<StoredMatchResults>(it)
                     } ?: StoredMatchResults()
                 }.getOrElse { StoredMatchResults() }
-                val savedPets = petRepository.getSavedPets(userId)
+                val savedPets = petRepository.getSavedPets(currentUserId)
                 val catalog = if (savedOnly) emptyList() else petRepository.listPets()
                 val scores = storedMatches.evaluations.associateBy { it.petId }
                 val pets = if (savedOnly) {
@@ -82,9 +94,14 @@ class MatchesViewModel @Inject constructor(
     }
 
     fun toggleFavorite(petId: String) {
+        val currentUserId = userId
+        if (currentUserId == null) {
+            _uiState.update { it.copy(error = "Sign in to save pets.") }
+            return
+        }
         viewModelScope.launch {
             try {
-                val resp = petRepository.toggleFavorite(userId, petId)
+                val resp = petRepository.toggleFavorite(currentUserId, petId)
                 _uiState.update { state ->
                     val updatedSaved = if (resp.isFavorited) {
                         state.savedPetIds + petId
@@ -100,14 +117,19 @@ class MatchesViewModel @Inject constructor(
                     state.copy(
                         savedPetIds = updatedSaved,
                         topMatch = updatedPets.firstOrNull(),
-                        otherMatches = updatedPets.drop(1)
+                        otherMatches = updatedPets.drop(1),
+                        actionError = null
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(error = e.localizedMessage ?: "Could not update saved pets. Please try again.")
+                    it.copy(actionError = e.localizedMessage ?: "Could not update saved pets. Please try again.")
                 }
             }
         }
+    }
+
+    fun clearActionError() {
+        _uiState.update { it.copy(actionError = null) }
     }
 }

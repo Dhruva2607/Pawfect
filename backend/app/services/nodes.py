@@ -5,6 +5,7 @@ LangGraph Nodes: Conversational Intake, Hybrid Retrieval, and Reasoning & Scorin
 
 import json
 import logging
+import re
 from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 
@@ -57,6 +58,23 @@ class MultiPetScoringOutput(BaseModel):
     )
 
 
+def _apply_species_override(constraints: Dict[str, Any], user_message: str) -> Dict[str, Any]:
+    """
+    The newest user message wins when it explicitly names a single species.
+    Prevents a previous 'dog' recommendation from sticking when the user later asks for a cat.
+    """
+    text = (user_message or "").lower()
+    mentions_dog = re.search(r"\bdogs?\b", text) is not None
+    mentions_cat = re.search(r"\bcats?\b", text) is not None
+
+    if mentions_dog == mentions_cat:
+        return constraints
+
+    updated = dict(constraints)
+    updated["species"] = "dog" if mentions_dog else "cat"
+    return updated
+
+
 # ── Node 1: Conversational Intake Node ───────────────────────────────
 
 def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
@@ -91,6 +109,7 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         "6. Allergies / Sensitivities: Any need for low-shedding or hypoallergenic pets?\n\n"
         "INSTRUCTIONS:\n"
         "- Merge all previously extracted constraints with any newly shared facts in the conversation.\n"
+        "- The newest user message ALWAYS wins: if the user asks for a different species than before, update species to the newly requested one.\n"
         "- Determine if we have at least 3-4 core dimensions (specifically species, housing, and energy/family).\n"
         "- If NOT sufficient yet, ask ONE natural, warm, conversational question covering the most important missing details.\n"
         "- Provide 2-4 short quick-reply options (e.g. ['Dog', 'Cat', 'Either is fine'] or ['Apartment', 'House with yard']).\n"
@@ -113,8 +132,9 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         ])
 
         updated_constraints = analysis.extracted_constraints.model_dump(exclude_none=True)
-        # Merge with prior
+        # Merge with prior, then let an explicit species request in the newest message win
         merged_constraints = {**prior_constraints, **updated_constraints}
+        merged_constraints = _apply_species_override(merged_constraints, user_msg)
 
         if analysis.is_sufficient_for_search:
             search_query = analysis.search_query or (
@@ -122,6 +142,9 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
                 f"{merged_constraints.get('housing_type', 'home')} with "
                 f"energy level {merged_constraints.get('energy_budget', 3)}/5"
             )
+            species = merged_constraints.get("species")
+            if species and species.lower() not in search_query.lower():
+                search_query = f"{species} {search_query}"
             return {
                 "extracted_constraints": merged_constraints,
                 "is_complete": True,
