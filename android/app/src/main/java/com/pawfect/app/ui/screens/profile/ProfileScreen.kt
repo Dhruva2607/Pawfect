@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pawfect.app.data.local.UserSession
 import com.pawfect.app.data.model.UserProfileDto
+import com.pawfect.app.ui.components.PawLogo
 import com.pawfect.app.ui.viewmodel.ProfileViewModel
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -90,7 +91,7 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My profile", fontWeight = FontWeight.Bold) },
+                title = { Text("My profile", style = MaterialTheme.typography.headlineSmall) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -120,7 +121,7 @@ fun ProfileScreen(
             Text("Your adoption journey", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
             Card(
-                shape = RoundedCornerShape(20.dp),
+                shape = MaterialTheme.shapes.extraLarge,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
@@ -136,7 +137,7 @@ fun ProfileScreen(
             Text("Account", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
             Card(
-                shape = RoundedCornerShape(20.dp),
+                shape = MaterialTheme.shapes.extraLarge,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
@@ -149,7 +150,7 @@ fun ProfileScreen(
             OutlinedButton(
                 onClick = onLogout,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(28.dp)
+                shape = MaterialTheme.shapes.medium
             ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
@@ -185,20 +186,19 @@ fun ProfileScreen(
 @Composable
 private fun ProfileHeader(profile: UserProfileDto?, session: UserSession?, savedCount: Int) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
         Row(
             Modifier.fillMaxWidth().padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface) {
-                Icon(
-                    Icons.Default.Pets,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(16.dp).size(28.dp)
-                )
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.size(60.dp)
+            ) {
+                PawLogo(Modifier.padding(14.dp).fillMaxSize())
             }
             Spacer(Modifier.size(16.dp))
             Column {
@@ -224,7 +224,12 @@ private fun ProfileMenuItem(icon: ImageVector, title: String, subtitle: String, 
             Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowForwardIos,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.size(14.dp)
+        )
     }
 }
 
@@ -246,7 +251,8 @@ private fun PreferencesDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lifestyle preferences") },
+        shape = MaterialTheme.shapes.extraLarge,
+        title = { Text("Lifestyle preferences", style = MaterialTheme.typography.headlineSmall) },
         text = {
             Column(Modifier.imePadding().verticalScroll(rememberScrollState())) {
                 if (error != null) {
@@ -257,17 +263,29 @@ private fun PreferencesDialog(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
-                OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
+                OutlinedTextField(
+                    name,
+                    { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small
+                )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true)
+                OutlinedTextField(
+                    email,
+                    { email = it },
+                    label = { Text("Email") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small
+                )
                 Spacer(Modifier.height(12.dp))
                 Text("Home type", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("apartment" to "Apartment", "house_with_yard" to "House with yard").forEach { (value, label) ->
                         if (housing == value) {
-                            Button(onClick = { housing = value }) { Text(label) }
+                            Button(onClick = { housing = value }, shape = MaterialTheme.shapes.medium) { Text(label) }
                         } else {
-                            OutlinedButton(onClick = { housing = value }) { Text(label) }
+                            OutlinedButton(onClick = { housing = value }, shape = MaterialTheme.shapes.medium) { Text(label) }
                         }
                     }
                 }
@@ -280,6 +298,7 @@ private fun PreferencesDialog(
         confirmButton = {
             Button(
                 enabled = !saving,
+                shape = MaterialTheme.shapes.medium,
                 onClick = { onSave(name, email, housing, children, otherPets, energy.toInt()) }
             ) { Text(if (saving) "Saving…" else "Save") }
         },

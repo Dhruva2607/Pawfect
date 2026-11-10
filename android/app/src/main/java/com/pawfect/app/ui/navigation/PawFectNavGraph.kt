@@ -1,5 +1,11 @@
 package com.pawfect.app.ui.navigation
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -33,7 +39,27 @@ fun PawFectNavGraph(
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        modifier = modifier
+        modifier = modifier,
+        enterTransition = {
+            fadeIn(tween(260)) + slideInHorizontally(
+                animationSpec = tween(260, easing = FastOutSlowInEasing)
+            ) { it / 14 }
+        },
+        exitTransition = {
+            fadeOut(tween(180)) + slideOutHorizontally(
+                animationSpec = tween(260, easing = FastOutSlowInEasing)
+            ) { -it / 24 }
+        },
+        popEnterTransition = {
+            fadeIn(tween(220)) + slideInHorizontally(
+                animationSpec = tween(260, easing = FastOutSlowInEasing)
+            ) { -it / 14 }
+        },
+        popExitTransition = {
+            fadeOut(tween(160)) + slideOutHorizontally(
+                animationSpec = tween(220, easing = FastOutSlowInEasing)
+            ) { it / 24 }
+        }
     ) {
         // Screen 1: Splash / Welcome
         composable(NavRoute.Welcome.route) {

@@ -21,9 +21,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pawfect.app.ui.components.CircularMatchGauge
-import com.pawfect.app.ui.theme.BackgroundWarm
+import com.pawfect.app.ui.components.PawErrorState
+import com.pawfect.app.ui.components.PawLogo
+import com.pawfect.app.ui.components.PawSkeleton
+import com.pawfect.app.ui.components.PawTag
+import com.pawfect.app.ui.theme.MatchAmber
 import com.pawfect.app.ui.theme.MatchGreen
-import com.pawfect.app.ui.theme.SurfaceWarm
 import com.pawfect.app.ui.viewmodel.CompatibilityViewModel
 
 /**
@@ -52,19 +55,27 @@ fun CompatibilityScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Compatibility Analysis", fontWeight = FontWeight.Bold) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+                            PawLogo(Modifier.padding(7.dp).size(18.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text("Compatibility", style = MaterialTheme.typography.headlineSmall)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceWarm)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         bottomBar = {
             Surface(
-                color = SurfaceWarm,
-                tonalElevation = 8.dp,
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 10.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Button(
@@ -74,6 +85,7 @@ fun CompatibilityScreen(
                         .fillMaxWidth()
                         .padding(16.dp)
                         .height(52.dp),
+                    shape = MaterialTheme.shapes.medium,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Continue to Adoption Process")
@@ -82,30 +94,26 @@ fun CompatibilityScreen(
                 }
             }
         },
-        containerColor = BackgroundWarm
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         if (uiState.isLoading && eval == null) {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
+                    .padding(paddingValues)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                CircularProgressIndicator()
+                PawSkeleton(Modifier.fillMaxWidth().height(280.dp), MaterialTheme.shapes.extraLarge)
+                PawSkeleton(Modifier.fillMaxWidth().height(120.dp), MaterialTheme.shapes.large)
+                PawSkeleton(Modifier.fillMaxWidth().height(120.dp), MaterialTheme.shapes.large)
             }
         } else if (eval == null) {
-            Column(
-                Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    uiState.error ?: "Compatibility could not be calculated.",
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { viewModel.evaluatePet(petId) }) { Text("Try again") }
-            }
+            PawErrorState(
+                message = uiState.error ?: "Compatibility could not be calculated.",
+                onRetry = { viewModel.evaluatePet(petId) },
+                modifier = Modifier.fillMaxSize().padding(paddingValues)
+            )
         } else {
             Column(
                 modifier = Modifier
@@ -118,8 +126,9 @@ fun CompatibilityScreen(
                 // High-precision circular gauge (e.g. 92%) [FROM MARKDOWN: Screen 6]
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
                         modifier = Modifier
@@ -149,6 +158,12 @@ fun CompatibilityScreen(
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PawTag("Grounded")
+                            PawTag("Explainable")
+                            PawTag("Shelter data")
+                        }
                     }
                 }
 
@@ -156,9 +171,8 @@ fun CompatibilityScreen(
 
                 // Bulleted Key Insights List [FROM MARKDOWN: Screen 6]
                 Text(
-                    text = "Key Insights & Alignment",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    text = "Key insights",
+                    style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -167,8 +181,8 @@ fun CompatibilityScreen(
                 // Pros
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -197,12 +211,12 @@ fun CompatibilityScreen(
                 if (eval.caveats.isNotEmpty()) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = MatchAmber, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Things to keep in mind", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                             }
@@ -214,7 +228,7 @@ fun CompatibilityScreen(
                                     modifier = Modifier.padding(vertical = 4.dp),
                                     verticalAlignment = Alignment.Top
                                 ) {
-                                    Text("• ", color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
+                                    Text("• ", color = MatchAmber, fontWeight = FontWeight.Bold)
                                     Text(caveat, style = MaterialTheme.typography.bodyMedium)
                                 }
                             }
@@ -227,7 +241,7 @@ fun CompatibilityScreen(
                 // Next Steps Prompt [FROM MARKDOWN: Screen 6]
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
@@ -239,7 +253,7 @@ fun CompatibilityScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Complete your 4-stage adoption application to schedule a meet-and-greet with shelter counselors.",
+                            text = "Complete your adoption application to schedule a meet-and-greet with shelter counselors.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }

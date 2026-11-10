@@ -22,15 +22,14 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.pawfect.app.ui.components.AdoptionStep
 import com.pawfect.app.ui.components.AdoptionStepperBar
-import com.pawfect.app.ui.theme.BackgroundWarm
-import com.pawfect.app.ui.theme.MatchGreen
-import com.pawfect.app.ui.theme.SurfaceWarm
+import com.pawfect.app.ui.components.PawLogo
+import com.pawfect.app.ui.components.PawTag
 import com.pawfect.app.ui.viewmodel.AdoptionViewModel
 
 /**
  * Screen 7: Adoption Process Stepper
  * [FROM MARKDOWN: Phase 5 - Screen 7]
- * Visual horizontal stepper (Match -> Review -> Apply -> Adopt), celebration graphic,
+ * Visual horizontal stepper (Match -> Review -> Apply), celebration graphic,
  * and "Fill Adoption Form" / "Save for Later" actions.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,16 +72,24 @@ fun AdoptionStepperScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Adoption Journey", fontWeight = FontWeight.Bold) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+                            PawLogo(Modifier.padding(7.dp).size(18.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text("Adoption journey", style = MaterialTheme.typography.headlineSmall)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceWarm)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        containerColor = BackgroundWarm
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -93,7 +100,7 @@ fun AdoptionStepperScreen(
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Visual horizontal stepper (Match -> Review -> Apply -> Adopt) [FROM MARKDOWN: Screen 7]
+            // Visual horizontal stepper (Match -> Review -> Apply)
             AdoptionStepperBar(currentStep = uiState.currentStep)
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -116,8 +123,8 @@ fun AdoptionStepperScreen(
                 // Celebration Graphic & Confirmation [FROM MARKDOWN: Screen 7]
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier
@@ -128,10 +135,15 @@ fun AdoptionStepperScreen(
                         Box(
                             modifier = Modifier
                                 .size(72.dp)
-                                .background(MatchGreen.copy(alpha = 0.15f), CircleShape),
+                                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("🎉", fontSize = 36.sp)
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(34.dp)
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -155,16 +167,13 @@ fun AdoptionStepperScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         uiState.applicationResult?.applicationId?.let { applicationId ->
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text(
-                                    text = "Application ID: $applicationId",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
+                            Text(
+                                "Application ID",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            PawTag(applicationId)
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -191,9 +200,10 @@ fun AdoptionStepperScreen(
                             onClick = onComplete,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp)
+                                .height(50.dp),
+                            shape = MaterialTheme.shapes.medium
                         ) {
-                            Text("Return to Dashboard")
+                            Text("Back to matches")
                         }
                     }
                 }
@@ -201,14 +211,13 @@ fun AdoptionStepperScreen(
                 // Adoption Application Form [FROM MARKDOWN: Screen 7]
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
                         Text(
-                            text = "Step 3: Fill Adoption Form",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            text = "Adoption application",
+                            style = MaterialTheme.typography.headlineSmall
                         )
                         Text(
                             text = "Applying to adopt ${uiState.pet?.name ?: "your matched companion"}",
@@ -223,7 +232,7 @@ fun AdoptionStepperScreen(
                             onValueChange = { applicantName = it },
                             label = { Text("Full Name") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.small
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -233,7 +242,7 @@ fun AdoptionStepperScreen(
                             onValueChange = { applicantEmail = it },
                             label = { Text("Email Address") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.small
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -243,7 +252,7 @@ fun AdoptionStepperScreen(
                             onValueChange = { applicantPhone = it },
                             label = { Text("Phone Number") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.small
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -253,7 +262,7 @@ fun AdoptionStepperScreen(
                             onValueChange = { housingDetails = it },
                             label = { Text("Home & Balcony/Yard Description") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.small
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -264,7 +273,7 @@ fun AdoptionStepperScreen(
                             label = { Text("Household members & other pets") },
                             modifier = Modifier.fillMaxWidth(),
                             maxLines = 2,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.small
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -275,7 +284,7 @@ fun AdoptionStepperScreen(
                             label = { Text("Message to Shelter Staff") },
                             modifier = Modifier.fillMaxWidth(),
                             maxLines = 3,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.small
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -297,12 +306,16 @@ fun AdoptionStepperScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             if (uiState.isLoading) {
-                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(24.dp)
+                                )
                             } else {
-                                Text("Submit Adoption Application 🚀")
+                                Text("Submit application")
                             }
                         }
 
@@ -312,7 +325,8 @@ fun AdoptionStepperScreen(
                             onClick = onBack,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .height(48.dp),
+                            shape = MaterialTheme.shapes.medium
                         ) {
                             Text("Back")
                         }

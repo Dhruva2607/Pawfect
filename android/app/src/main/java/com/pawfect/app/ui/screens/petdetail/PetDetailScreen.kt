@@ -15,15 +15,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
+import com.pawfect.app.ui.components.PawErrorState
+import com.pawfect.app.ui.components.PawTag
+import com.pawfect.app.ui.components.PetImage
 import com.pawfect.app.ui.theme.AccentCoral
-import com.pawfect.app.ui.theme.BackgroundWarm
-import com.pawfect.app.ui.theme.SurfaceWarm
 import com.pawfect.app.ui.viewmodel.PetDetailViewModel
 
 /**
@@ -63,8 +63,8 @@ fun PetDetailScreen(
         bottomBar = {
             if (pet != null) {
                 Surface(
-                    color = SurfaceWarm,
-                    tonalElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 10.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -77,7 +77,8 @@ fun PetDetailScreen(
                             onClick = onViewCompatibility,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(52.dp)
+                                .height(52.dp),
+                            shape = MaterialTheme.shapes.medium
                         ) {
                             Text("My fit")
                         }
@@ -87,6 +88,7 @@ fun PetDetailScreen(
                             modifier = Modifier
                                 .weight(1.3f)
                                 .height(52.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Text("Apply to adopt")
@@ -95,7 +97,7 @@ fun PetDetailScreen(
                 }
             }
         },
-        containerColor = BackgroundWarm
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         if (uiState.isLoading && pet == null) {
             Box(
@@ -107,15 +109,11 @@ fun PetDetailScreen(
                 CircularProgressIndicator()
             }
         } else if (pet == null) {
-            Column(
-                Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(uiState.error ?: "This pet could not be loaded.")
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { viewModel.loadPet(petId) }) { Text("Try again") }
-            }
+            PawErrorState(
+                message = uiState.error ?: "This pet could not be loaded.",
+                onRetry = { viewModel.loadPet(petId) },
+                modifier = Modifier.fillMaxSize().padding(paddingValues)
+            )
         } else {
             Column(
                 modifier = Modifier
@@ -127,43 +125,60 @@ fun PetDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(320.dp)
+                        .height(340.dp)
                 ) {
-                    AsyncImage(
-                        model = pet.photoUrl,
+                    PetImage(
+                        url = pet.photoUrl,
                         contentDescription = pet.name,
-                        contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        Color(0x33000000),
+                                        MaterialTheme.colorScheme.background
+                                    )
+                                )
+                            )
+                    )
 
-                    // Back button
                     IconButton(
                         onClick = onBack,
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(16.dp)
-                            .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
 
-                    // Favorite toggle
                     IconButton(
                         onClick = { viewModel.toggleFavorite() },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(16.dp)
-                            .background(Color.White.copy(alpha = 0.85f), CircleShape)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape)
                     ) {
                         Icon(
                             imageVector = if (uiState.isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
-                            tint = if (uiState.isFavorited) AccentCoral else Color.Gray
+                            tint = if (uiState.isFavorited) AccentCoral else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(y = (-28).dp)
+                        .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(20.dp)
+                ) {
                     // Age/Breed/Gender Header [FROM MARKDOWN: Screen 5]
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -210,18 +225,7 @@ fun PetDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        pet.temperament.forEach { tag ->
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Text(
-                                    text = tag,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        }
+                        pet.temperament.forEach { tag -> PawTag(tag) }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -263,7 +267,7 @@ fun PetDetailScreen(
                         Text("Known Triggers / Sensitivities", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(6.dp))
                         pet.triggers.forEach { trigger ->
-                            Text("• $trigger", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFDC2626))
+                            Text("• $trigger", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
                         }
                     }
 
@@ -271,7 +275,7 @@ fun PetDetailScreen(
                     OutlinedButton(
                         onClick = onStartAdoptionChat,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = RoundedCornerShape(24.dp)
+                        shape = MaterialTheme.shapes.medium
                     ) {
                         Text("Ask the AI matchmaker about ${pet.name}")
                     }

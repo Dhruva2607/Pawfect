@@ -1,6 +1,9 @@
 package com.pawfect.app.ui.screens.auth
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,20 +12,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -41,10 +50,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.pawfect.app.ui.components.PawLogo
 import com.pawfect.app.ui.viewmodel.AuthViewModel
 
 @Composable
@@ -82,95 +98,71 @@ fun AuthScreen(
                 .padding(insets)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.Center
+                .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Icon(
-                    Icons.Default.Pets,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(14.dp)
-                )
+            Spacer(Modifier.height(8.dp))
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+                PawLogo(Modifier.padding(14.dp).size(34.dp))
             }
             Spacer(Modifier.height(20.dp))
             Text(
-                if (isSignUp) "Let’s find your match" else "Welcome back",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
+                if (isSignUp) "Let's find your match" else "Welcome back",
+                style = MaterialTheme.typography.displaySmall
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                if (isSignUp) "Create your account and tell us a little about home."
+                if (isSignUp) "Create an account and tell us a little about home."
                 else "Sign in to pick up where you left off.",
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(24.dp))
 
+            AuthModeToggle(isSignUp) {
+                isSignUp = it
+                viewModel.clearError()
+            }
+
+            Spacer(Modifier.height(20.dp))
             if (isSignUp) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Full name") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                AuthField(name, { name = it }, "Full name", Icons.Outlined.Person)
                 Spacer(Modifier.height(12.dp))
             }
-            OutlinedTextField(
+            AuthField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Email address") },
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                label = "Email address",
+                icon = Icons.Outlined.Email,
+                keyboardType = KeyboardType.Email
             )
             Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
+            AuthField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Password") },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                label = "Password",
+                icon = Icons.Outlined.Lock,
+                keyboardType = KeyboardType.Password,
+                isPassword = true
             )
 
             if (isSignUp) {
                 Spacer(Modifier.height(20.dp))
-                Text("A little about your home", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    listOf("Apartment", "House with yard").forEach { option ->
-                        val value = if (option == "Apartment") "apartment" else "house_with_yard"
-                        if (housingType == value) {
-                            Button(
-                                onClick = { housingType = value },
-                                shape = RoundedCornerShape(24.dp),
-                                contentPadding = ButtonDefaults.ContentPadding
-                            ) { Text(option) }
-                        } else {
-                            OutlinedButton(
-                                onClick = { housingType = value },
-                                shape = RoundedCornerShape(24.dp)
-                            ) { Text(option) }
-                        }
-                    }
-                }
-                PreferenceSwitch("Children at home", hasChildren) { hasChildren = it }
-                PreferenceSwitch("Other pets at home", hasOtherPets) { hasOtherPets = it }
-                Text("Your activity level · ${energy.toInt()}/5", style = MaterialTheme.typography.bodyMedium)
-                Slider(value = energy, onValueChange = { energy = it }, valueRange = 1f..5f, steps = 3)
+                HomePreferencesCard(
+                    housingType = housingType,
+                    onHousingType = { housingType = it },
+                    hasChildren = hasChildren,
+                    onHasChildren = { hasChildren = it },
+                    hasOtherPets = hasOtherPets,
+                    onHasOtherPets = { hasOtherPets = it },
+                    energy = energy,
+                    onEnergy = { energy = it }
+                )
             }
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
                     viewModel.authenticate(
@@ -186,27 +178,155 @@ fun AuthScreen(
                 },
                 enabled = !uiState.isLoading,
                 modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(28.dp)
+                shape = MaterialTheme.shapes.medium
             ) {
                 if (uiState.isLoading) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
                 } else {
                     Text(if (isSignUp) "Create account" else "Log in")
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(if (isSignUp) "Already have an account?" else "New to PawFect?")
-                TextButton(onClick = {
+            TextButton(
+                onClick = {
                     isSignUp = !isSignUp
                     viewModel.clearError()
-                }) {
-                    Text(if (isSignUp) "Log in" else "Sign up")
+                },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(if (isSignUp) "Already have an account? Log in" else "New to PawFect? Sign up")
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun AuthModeToggle(isSignUp: Boolean, onChange: (Boolean) -> Unit) {
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+        Row(Modifier.fillMaxWidth().padding(4.dp)) {
+            listOf("Sign up" to true, "Log in" to false).forEach { (label, value) ->
+                val selected = isSignUp == value
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(CircleShape)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                        )
+                        .clickable { onChange(value) }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AuthField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    icon: ImageVector,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    isPassword: Boolean = false
+) {
+    var passwordVisible by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        leadingIcon = {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        },
+        trailingIcon = if (isPassword) {
+            {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                    )
+                }
+            }
+        } else {
+            null
+        },
+        visualTransformation = if (isPassword && !passwordVisible) {
+            PasswordVisualTransformation()
+        } else {
+            VisualTransformation.None
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        singleLine = true,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+        )
+    )
+}
+
+@Composable
+private fun HomePreferencesCard(
+    housingType: String,
+    onHousingType: (String) -> Unit,
+    hasChildren: Boolean,
+    onHasChildren: (Boolean) -> Unit,
+    hasOtherPets: Boolean,
+    onHasOtherPets: (Boolean) -> Unit,
+    energy: Float,
+    onEnergy: (Float) -> Unit
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text("A little about your home", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("Apartment" to "apartment", "House with yard" to "house_with_yard").forEach { (label, value) ->
+                    FilterChip(
+                        selected = housingType == value,
+                        onClick = { onHousingType(value) },
+                        label = { Text(label) },
+                        shape = CircleShape
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            PreferenceSwitch("Children at home", hasChildren, onHasChildren)
+            PreferenceSwitch("Other pets at home", hasOtherPets, onHasOtherPets)
+            Spacer(Modifier.height(4.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Activity level", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "${energy.toInt()}/5",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Slider(value = energy, onValueChange = onEnergy, valueRange = 1f..5f, steps = 3)
         }
     }
 }
