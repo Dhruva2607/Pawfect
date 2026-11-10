@@ -42,6 +42,10 @@ ATLAS_VECTOR_SEARCH_INDEX_DEFINITION: Dict[str, Any] = {
             {
                 "type": "filter",
                 "path": "housing_requirement"
+            },
+            {
+                "type": "filter",
+                "path": "energy_level"
             }
         ]
     }
@@ -89,7 +93,11 @@ def setup_standard_indexes(db: Database | None = None) -> Dict[str, list]:
     evals_col = db["match_evaluations"]
     idx_eval_session = evals_col.create_index([("session_id", ASCENDING)], name="idx_eval_session")
     idx_eval_pet = evals_col.create_index([("pet_id", ASCENDING)], name="idx_eval_pet")
-    created_indexes["match_evaluations"] = [idx_eval_session, idx_eval_pet]
+    idx_eval_session_pet = evals_col.create_index(
+        [("session_id", ASCENDING), ("pet_id", ASCENDING)],
+        name="idx_eval_session_pet"
+    )
+    created_indexes["match_evaluations"] = [idx_eval_session, idx_eval_pet, idx_eval_session_pet]
 
     # User sessions indexes
     sessions_col = db["user_sessions"]

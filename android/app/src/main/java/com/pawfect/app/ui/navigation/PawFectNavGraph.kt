@@ -64,8 +64,11 @@ fun PawFectNavGraph(
                 onBack = { navController.popBackStack() },
                 onAuthenticated = {
                     onAuthenticated()
+                    navController.navigate(NavRoute.Home.route) {
+                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                        launchSingleTop = true
+                    }
                     navController.navigate(NavRoute.Chat.route) {
-                        popUpTo(NavRoute.Welcome.route) { inclusive = true }
                         launchSingleTop = true
                     }
                 }

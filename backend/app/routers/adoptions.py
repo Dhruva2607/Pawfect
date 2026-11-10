@@ -46,6 +46,14 @@ async def apply_adoption(request: AdoptionApplyRequest):
     """
     db = get_async_db()
 
+    # Verify the applicant user exists
+    user_doc = await db["user_profiles"].find_one({"_id": request.user_id})
+    if not user_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with ID '{request.user_id}' does not exist."
+        )
+
     # Verify pet exists
     pet_doc = await db["pets"].find_one({"_id": request.pet_id})
     if not pet_doc:
@@ -57,7 +65,7 @@ async def apply_adoption(request: AdoptionApplyRequest):
     pet = Pet(**pet_doc)
 
     # Generate custom application id
-    timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     app_id = f"app_{request.user_id}_{pet.id}_{timestamp_str}"
 
     app_record = AdoptionApplication(

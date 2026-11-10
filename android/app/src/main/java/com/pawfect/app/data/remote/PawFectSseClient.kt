@@ -21,6 +21,7 @@ import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -30,7 +31,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class PawFectSseClient @Inject constructor(
-    private val okHttpClient: OkHttpClient,
+    @Named("SseClient") private val okHttpClient: OkHttpClient,
     private val json: Json
 ) {
     companion object {
@@ -62,6 +63,16 @@ class PawFectSseClient @Inject constructor(
 
         val listener = object : EventSourceListener() {
             override fun onOpen(eventSource: EventSource, response: Response) {
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "SSE connection failed with HTTP ${response.code}.")
+                    trySend(
+                        SseChatEvent.Error(
+                            IllegalStateException("Server returned HTTP ${response.code}.")
+                        )
+                    )
+                    close()
+                    return
+                }
                 Log.d(TAG, "SSE Connection Opened.")
             }
 
@@ -131,9 +142,13 @@ class PawFectSseClient @Inject constructor(
             }
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
-                Log.e(TAG, "SSE Failure: ${t?.message}")
-                trySend(SseChatEvent.Error(t ?: Exception("SSE connection failure")))
-                close(t)
+                val failure = t ?: Exception(
+                    response?.let { "SSE connection failed with HTTP ${it.code}." }
+                        ?: "SSE connection failure"
+                )
+                Log.e(TAG, "SSE Failure: ${failure.message}")
+                trySend(SseChatEvent.Error(failure))
+                close(failure)
             }
 
             override fun onClosed(eventSource: EventSource) {

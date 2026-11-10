@@ -48,7 +48,14 @@ fun MatchesScreen(
     viewModel: MatchesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(savedOnly) { viewModel.loadMatches(savedOnly) }
+    LaunchedEffect(uiState.actionError) {
+        uiState.actionError?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearActionError()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -68,6 +75,7 @@ fun MatchesScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceWarm)
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = BackgroundWarm
     ) { paddingValues ->
         if (uiState.isLoading) {
@@ -241,7 +249,7 @@ fun HeroMatchCard(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "${pet.breed} • ${pet.ageMonths / 12} yrs old • ${pet.gender}",
+                            text = "${pet.breed} • ${formatAge(pet.ageMonths)} old • ${pet.gender}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -389,3 +397,12 @@ fun CompactPetCard(
         }
     }
 }
+
+private fun formatAge(ageMonths: Int): String =
+    if (ageMonths >= 12) {
+        val years = ageMonths / 12
+        val months = ageMonths % 12
+        if (months == 0) "$years yr" else "$years yr $months mo"
+    } else {
+        "$ageMonths mo"
+    }

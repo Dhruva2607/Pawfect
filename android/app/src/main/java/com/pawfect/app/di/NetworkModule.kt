@@ -46,9 +46,7 @@ object NetworkModule {
         coerceInputValues = true
     }
 
-    @Provides
-    @Singleton
-    fun provideOkHttpClient(sessionManager: SessionManager): OkHttpClient {
+    private fun buildClient(sessionManager: SessionManager, readTimeoutSeconds: Long): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BASIC
@@ -68,11 +66,26 @@ object NetworkModule {
                 chain.proceed(request)
             }
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
     }
+
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(sessionManager: SessionManager): OkHttpClient =
+        buildClient(sessionManager, readTimeoutSeconds = 60)
+
+    /**
+     * Long-lived client for Server-Sent Events. A 0 read timeout disables it so
+     * slow model turns are not aborted while waiting for the first token.
+     */
+    @Provides
+    @Singleton
+    @Named("SseClient")
+    fun provideSseOkHttpClient(sessionManager: SessionManager): OkHttpClient =
+        buildClient(sessionManager, readTimeoutSeconds = 0)
 
     @Provides
     @Singleton

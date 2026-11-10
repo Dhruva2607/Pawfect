@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.config import ALLOWED_ORIGINS
 from app.database.indexes import setup_standard_indexes, setup_atlas_vector_search_index
 from app.database.connection import close_clients, get_async_db
 from app.routers import (
@@ -32,7 +33,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing PawFect API server...")
     try:
         await asyncio.to_thread(setup_standard_indexes)
-        setup_atlas_vector_search_index()
+        await asyncio.to_thread(setup_atlas_vector_search_index)
         logger.info("PawFect database indexes verified.")
     except Exception:
         logger.exception("Database index setup failed; database-backed requests will remain unavailable.")
@@ -54,7 +55,7 @@ app = FastAPI(
 # [FROM MARKDOWN: Section 4 - Network Routing & Host Resolution]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

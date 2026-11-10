@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -80,6 +81,7 @@ fun ProfileScreen(
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
+            showSettings = false
             snackbarHost.showSnackbar(it)
             viewModel.clearMessage()
         }
@@ -162,10 +164,10 @@ fun ProfileScreen(
             profile = uiState.profile,
             session = uiState.session,
             saving = uiState.isSaving,
+            error = uiState.error,
             onDismiss = { showSettings = false },
             onSave = { name, email, housing, children, pets, energy ->
                 viewModel.savePreferences(name, email, housing, children, pets, energy)
-                showSettings = false
             }
         )
     }
@@ -231,6 +233,7 @@ private fun PreferencesDialog(
     profile: UserProfileDto?,
     session: UserSession?,
     saving: Boolean,
+    error: String? = null,
     onDismiss: () -> Unit,
     onSave: (String, String, String, Boolean, Boolean, Int) -> Unit
 ) {
@@ -245,7 +248,15 @@ private fun PreferencesDialog(
         onDismissRequest = onDismiss,
         title = { Text("Lifestyle preferences") },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+            Column(Modifier.imePadding().verticalScroll(rememberScrollState())) {
+                if (error != null) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true)

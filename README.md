@@ -52,9 +52,10 @@ Edit `backend/.env` and set:
 GOOGLE_API_KEY=your-google-ai-studio-api-key
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-host>/?retryWrites=true&w=majority
 DATABASE_NAME=pawfect
+ALLOWED_ORIGINS=*
 ```
 
-These are the only environment variables read by the backend configuration in `backend/app/config.py`. `GOOGLE_API_KEY` defaults to an empty string, `MONGODB_URI` defaults to `mongodb://localhost:27017`, and `DATABASE_NAME` defaults to `pawfect`. A valid Gemini key and a reachable MongoDB are needed for full functionality. `HOST`, `PORT`, and `DEBUG` are not read from `.env`; choose the bind address and port in the Uvicorn command.
+These are the only environment variables read by the backend configuration in `backend/app/config.py`. `GOOGLE_API_KEY` defaults to an empty string, `MONGODB_URI` defaults to `mongodb://localhost:27017`, `DATABASE_NAME` defaults to `pawfect`, and `ALLOWED_ORIGINS` defaults to `*` (all origins; set a comma-separated list to restrict CORS). A valid Gemini key and a reachable MongoDB are needed for full functionality. `HOST`, `PORT`, and `DEBUG` are not read from `.env`; choose the bind address and port in the Uvicorn command.
 
 For MongoDB Atlas, create a database user and allow the backend host's IP address in Network Access. Do not expose a database to all IP addresses except as a temporary, deliberate development choice. URL-encode special characters in the MongoDB username/password when constructing the connection URI.
 
@@ -69,7 +70,8 @@ At startup the backend attempts to create or verify the `vector_index` on the `p
     { "type": "filter", "path": "species" },
     { "type": "filter", "path": "good_with_other_pets" },
     { "type": "filter", "path": "good_with_kids" },
-    { "type": "filter", "path": "housing_requirement" }
+    { "type": "filter", "path": "housing_requirement" },
+    { "type": "filter", "path": "energy_level" }
   ]
 }
 ```

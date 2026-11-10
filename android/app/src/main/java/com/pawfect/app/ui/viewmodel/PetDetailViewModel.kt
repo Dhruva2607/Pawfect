@@ -34,9 +34,12 @@ class PetDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val pet = petRepository.getPet(petId)
-                val savedPets = petRepository.getSavedPets(
-                    sessionManager.currentSession()?.userId.orEmpty()
-                ).map { it.id }.toSet()
+                val userId = sessionManager.currentSession()?.userId
+                val savedPets = if (userId != null) {
+                    petRepository.getSavedPets(userId).map { it.id }.toSet()
+                } else {
+                    emptySet()
+                }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -57,12 +60,14 @@ class PetDetailViewModel @Inject constructor(
 
     fun toggleFavorite() {
         val currentPet = _uiState.value.pet ?: return
+        val userId = sessionManager.currentSession()?.userId
+        if (userId == null) {
+            _uiState.update { it.copy(error = "Sign in to save pets.") }
+            return
+        }
         viewModelScope.launch {
             try {
-                val resp = petRepository.toggleFavorite(
-                    sessionManager.currentSession()?.userId.orEmpty(),
-                    currentPet.id
-                )
+                val resp = petRepository.toggleFavorite(userId, currentPet.id)
                 _uiState.update { it.copy(isFavorited = resp.isFavorited) }
             } catch (e: Exception) {
                 _uiState.update {
@@ -70,5 +75,9 @@ class PetDetailViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
     }
 }

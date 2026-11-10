@@ -48,9 +48,14 @@ def generate_embedding(text: str, max_retries: int = 4) -> List[float]:
                 )
                 if resp.embeddings and len(resp.embeddings) > 0:
                     values = resp.embeddings[0].values
-                    if len(values) == VECTOR_DIMENSION:
-                        return values
-                    return values[:VECTOR_DIMENSION]
+                    if len(values) >= VECTOR_DIMENSION:
+                        return values[:VECTOR_DIMENSION]
+                    logger.warning(
+                        "Embedding model %s returned %d dimensions (expected %d); trying next model.",
+                        model_name,
+                        len(values),
+                        VECTOR_DIMENSION,
+                    )
             except Exception as e:
                 # If model not found, try next candidate
                 if "404" in str(e) or "NOT_FOUND" in str(e):

@@ -48,8 +48,18 @@ fun PetDetailScreen(
     }
 
     val pet = uiState.pet
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.error) {
+        val message = uiState.error
+        if (pet != null && message != null) {
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearError()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (pet != null) {
                 Surface(

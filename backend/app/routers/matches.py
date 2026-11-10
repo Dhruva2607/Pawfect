@@ -3,6 +3,7 @@ Direct Compatibility Evaluation endpoints.
 [FROM MARKDOWN] matches Step 3.1: POST /api/v1/matches/direct-eval.
 """
 
+import asyncio
 import json
 import logging
 from typing import Optional, List
@@ -100,7 +101,7 @@ async def direct_eval(request: DirectEvalRequest):
         "Generate a structured compatibility evaluation."
     )
 
-    llm = get_chat_llm(temperature=0.1)
+    llm = await asyncio.to_thread(get_chat_llm, temperature=0.1)
     structured_llm = llm.with_structured_output(SinglePetCompatibility)
 
     try:
@@ -137,8 +138,10 @@ async def direct_eval(request: DirectEvalRequest):
         caveats=eval_result.caveats,
         reasoning_summary=eval_result.reasoning_summary
     )
-    await db["match_evaluations"].insert_one(
-        eval_record.model_dump(by_alias=True, exclude_none=True)
+    await db["match_evaluations"].update_one(
+        {"session_id": request.session_id, "pet_id": pet.id},
+        {"$set": eval_record.model_dump(by_alias=True, exclude={"id"}, exclude_none=True)},
+        upsert=True
     )
 
     return DirectEvalResponse(

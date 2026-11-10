@@ -59,6 +59,8 @@ class ChatViewModel @Inject constructor(
         ChatUiState(
             sessionId = sessionId,
             messages = loadMessages(),
+            quickReplies = loadQuickReplies(),
+            isComplete = sessionManager.isChatComplete(),
             candidateMatches = loadMatchResults().candidateMatches,
             evaluations = loadMatchResults().evaluations
         )
@@ -87,9 +89,14 @@ class ChatViewModel @Inject constructor(
                 messages = it.messages + userMsg + botStreamingMsg,
                 isTyping = true,
                 quickReplies = emptyList(),
+                candidateMatches = emptyList(),
+                evaluations = emptyList(),
+                isComplete = false,
                 error = null
             )
         }
+        sessionManager.saveQuickRepliesJson("[]")
+        sessionManager.saveChatComplete(false)
 
         val sessionId = _uiState.value.sessionId
 
@@ -117,6 +124,7 @@ class ChatViewModel @Inject constructor(
                             }
                             is SseChatEvent.QuickReplies -> {
                                 _uiState.update { it.copy(quickReplies = event.quickReplies) }
+                                sessionManager.saveQuickRepliesJson(json.encodeToString(event.quickReplies))
                             }
                             is SseChatEvent.Matches -> {
                                 _uiState.update {
@@ -126,6 +134,7 @@ class ChatViewModel @Inject constructor(
                                         isComplete = true
                                     )
                                 }
+                                sessionManager.saveChatComplete(true)
                                 persistMatches()
                             }
                             is SseChatEvent.Done -> {
@@ -144,6 +153,7 @@ class ChatViewModel @Inject constructor(
                                         isComplete = event.isComplete || state.isComplete
                                     )
                                 }
+                                sessionManager.saveChatComplete(_uiState.value.isComplete)
                                 persistMessages()
                             }
                             is SseChatEvent.Error -> {
@@ -196,10 +206,19 @@ class ChatViewModel @Inject constructor(
 
     private fun loadMessages(): List<UiChatMessage> = runCatching {
         sessionManager.conversationJson()?.let {
-            json.decodeFromString<List<UiChatMessage>>(it)
+            json.decodeFromString<List<UiChatMessage>>(it).takeLast(MAX_PERSISTED_MESSAGES)
         }.orEmpty()
     }.getOrElse {
         Log.w("ChatViewModel", "Could not restore the local conversation.", it)
+        emptyList()
+    }
+
+    private fun loadQuickReplies(): List<String> = runCatching {
+        sessionManager.quickRepliesJson()?.let {
+            json.decodeFromString<List<String>>(it)
+        }.orEmpty()
+    }.getOrElse {
+        Log.w("ChatViewModel", "Could not restore quick replies.", it)
         emptyList()
     }
 
@@ -214,9 +233,10 @@ class ChatViewModel @Inject constructor(
 
     private fun persistMessages() {
         try {
-            sessionManager.saveConversationJson(
-                json.encodeToString(_uiState.value.messages.map { it.copy(isStreaming = false) })
-            )
+            val recentMessages = _uiState.value.messages
+                .takeLast(MAX_PERSISTED_MESSAGES)
+                .map { it.copy(isStreaming = false) }
+            sessionManager.saveConversationJson(json.encodeToString(recentMessages))
         } catch (error: Exception) {
             Log.e("ChatViewModel", "Could not save the local conversation.", error)
             _uiState.update {
@@ -241,5 +261,9 @@ class ChatViewModel @Inject constructor(
                 it.copy(error = "Your latest matches could not be saved on this device.")
             }
         }
+    }
+
+    private companion object {
+        const val MAX_PERSISTED_MESSAGES = 100
     }
 }

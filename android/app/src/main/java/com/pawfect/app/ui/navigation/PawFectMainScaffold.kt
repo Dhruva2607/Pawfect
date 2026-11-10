@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 
@@ -55,7 +54,7 @@ fun PawFectMainScaffold(
                             onClick = {
                                 if (currentRoute != item.route) {
                                     navController.navigate(item.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
+                                        popUpTo(NavRoute.Home.route) {
                                             saveState = true
                                         }
                                         launchSingleTop = true
@@ -91,7 +90,8 @@ fun PawFectMainScaffold(
                 onLogout()
                 authenticated = false
                 navController.navigate(NavRoute.Welcome.route) {
-                    popUpTo(navController.graph.id) { inclusive = true }
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    launchSingleTop = true
                 }
             }
         )
