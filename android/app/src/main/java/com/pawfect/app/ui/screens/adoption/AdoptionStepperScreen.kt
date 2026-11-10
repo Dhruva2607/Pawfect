@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -239,8 +241,10 @@ fun AdoptionStepperScreen(
 
                         OutlinedTextField(
                             value = applicantEmail,
-                            onValueChange = { applicantEmail = it },
+                            onValueChange = { applicantEmail = it.trim() },
                             label = { Text("Email Address") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.small
                         )
@@ -249,8 +253,17 @@ fun AdoptionStepperScreen(
 
                         OutlinedTextField(
                             value = applicantPhone,
-                            onValueChange = { applicantPhone = it },
+                            onValueChange = { input ->
+                                // Restrict strictly to numbers (digits only)
+                                val digitsOnly = input.filter { it.isDigit() }
+                                if (digitsOnly.length <= 15) {
+                                    applicantPhone = digitsOnly
+                                }
+                            },
                             label = { Text("Phone Number") },
+                            placeholder = { Text("Numbers only (e.g. 9876543210)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.small
                         )

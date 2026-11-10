@@ -338,3 +338,38 @@ def test_sse_reports_chat_persistence_failures(monkeypatch):
     assert events[-1]["event"] == "error"
     assert json.loads(events[-1]["data"])["event"] == "error"
     assert all(event["event"] != "done" for event in events)
+
+
+def test_conversational_intake_rejects_irrelevant_or_unsupported_species(monkeypatch):
+    from app.services import nodes
+    from app.services.nodes import IntakeAnalysisOutput
+    from app.services.state import LifestyleConstraints
+
+    class FakeStructuredLLM:
+        def invoke(self, messages):
+            return IntakeAnalysisOutput(
+                extracted_constraints=LifestyleConstraints(),
+                is_sufficient_for_search=False,
+                is_unsupported_or_irrelevant=True,
+                follow_up_question="We are only an adoption center for cats and dogs. Would you like to adopt a dog or cat?",
+                suggested_quick_replies=["Looking for a Dog", "Looking for a Cat"]
+            )
+
+    class FakeLLM:
+        def with_structured_output(self, schema):
+            return FakeStructuredLLM()
+
+    monkeypatch.setattr(nodes, "get_chat_llm", lambda **_: FakeLLM())
+
+    state = {
+        "user_message": "Do you have parrots or reptiles?",
+        "conversation_history": [],
+        "extracted_constraints": {},
+    }
+    result = nodes.conversational_intake_node(state)
+
+    assert result["is_complete"] is False
+    assert "cat" in result["response_message"].lower()
+    assert "dog" in result["response_message"].lower()
+    assert "Looking for a Dog" in result["quick_replies"]
+

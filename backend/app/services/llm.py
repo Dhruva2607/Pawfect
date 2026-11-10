@@ -14,12 +14,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_TEMPERATURE = 0.1
 
 # Active working model verified on Google GenAI API endpoint
-VERIFIED_WORKING_MODEL = "gemini-3.1-flash-lite"
+VERIFIED_WORKING_MODEL = "gemini-3.5-flash"
 SUPPORTED_MODELS = [
-    "gemini-1.5-flash",
-    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.8-flash"
+    "gemini-2.5-pro"
 ]
 
 _resolved_model: Optional[str] = None
@@ -35,19 +34,23 @@ def resolve_active_model() -> str:
         return _resolved_model
 
     # Check candidates
-    for m in [VERIFIED_WORKING_MODEL, "gemini-1.5-flash", "gemini-3.5-flash-lite"]:
+    for m in [VERIFIED_WORKING_MODEL, "gemini-3.5-flash-lite"]:
         try:
             test_llm = ChatGoogleGenerativeAI(
                 model=m,
                 google_api_key=GOOGLE_API_KEY,
                 temperature=DEFAULT_TEMPERATURE,
             )
-            # Quick ping
-            test_llm.invoke("ping")
+            # Quick test with structured output
+            from pydantic import BaseModel
+            class _Ping(BaseModel):
+                ok: bool
+            test_llm.with_structured_output(_Ping).invoke("ping")
             _resolved_model = m
             logger.info("Resolved active Gemini flash model: %s", m)
             return _resolved_model
-        except Exception:
+        except Exception as ex:
+            logger.warning("Model candidate %s failed test: %s", m, ex)
             continue
 
     _resolved_model = VERIFIED_WORKING_MODEL

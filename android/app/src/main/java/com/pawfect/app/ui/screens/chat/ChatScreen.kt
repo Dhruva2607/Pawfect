@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -77,6 +78,7 @@ import com.pawfect.app.ui.viewmodel.UiChatMessage
 fun ChatScreen(
     onViewPetDetail: (String) -> Unit,
     onViewCompatibility: (String) -> Unit,
+    onStartAdoption: (String) -> Unit,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -168,7 +170,7 @@ fun ChatScreen(
                 }
                 if (uiState.candidateMatches.isNotEmpty() && uiState.evaluations.isNotEmpty()) {
                     item {
-                        TopMatchCard(uiState, onViewPetDetail, onViewCompatibility)
+                        TopMatchCard(uiState, onViewPetDetail, onViewCompatibility, onStartAdoption)
                     }
                 }
             }
@@ -185,7 +187,7 @@ fun ChatScreen(
                     items(uiState.quickReplies) { chip ->
                         SuggestionChip(
                             onClick = {
-                                val lower = chip.lowercase()
+                                val lower = chip.lowercase().trim()
                                 when {
                                     lower.contains("alternative") ||
                                         lower.contains("other match") ||
@@ -193,12 +195,34 @@ fun ChatScreen(
 
                                     lower.startsWith("learn more about") || lower.startsWith("view ") -> {
                                         val name = chip.substringAfter("about ", "")
-                                            .ifBlank { chip.substringAfter("View ", "") }
+                                            .ifBlank { chip.substringAfter("view ", "") }
                                             .trim()
                                         val pet = uiState.candidateMatches.firstOrNull {
                                             it.name.equals(name, ignoreCase = true)
                                         }
                                         if (pet != null) onViewPetDetail(pet.id) else viewModel.sendMessage(chip)
+                                    }
+
+                                    lower.contains("adoption application") ||
+                                        lower.contains("start adoption") ||
+                                        lower.contains("apply to adopt") ||
+                                        lower.contains("start application") ||
+                                        lower == "apply" -> {
+                                        val count = minOf(uiState.candidateMatches.size, uiState.evaluations.size)
+                                        val index = uiState.displayedMatchIndex.coerceIn(0, (count - 1).coerceAtLeast(0))
+                                        val petId = if (uiState.candidateMatches.isNotEmpty()) {
+                                            uiState.candidateMatches.getOrNull(index)?.id
+                                                ?: uiState.candidateMatches.first().id
+                                        } else {
+                                            uiState.evaluations.getOrNull(index)?.petId
+                                                ?: uiState.evaluations.firstOrNull()?.petId
+                                        }
+
+                                        if (petId != null) {
+                                            onStartAdoption(petId)
+                                        } else {
+                                            viewModel.sendMessage(chip)
+                                        }
                                     }
 
                                     else -> viewModel.sendMessage(chip)
@@ -247,8 +271,20 @@ fun ChatScreen(
                     FilledIconButton(
                         onClick = {
                             if (inputMessage.isNotBlank()) {
-                                viewModel.sendMessage(inputMessage)
-                                inputMessage = ""
+                                val trimmed = inputMessage.trim()
+                                val lower = trimmed.lowercase()
+                                val hasCandidates = uiState.candidateMatches.isNotEmpty()
+                                if (hasCandidates && (lower.contains("start adoption") || lower.contains("adoption application") || lower == "apply")) {
+                                    val count = minOf(uiState.candidateMatches.size, uiState.evaluations.size)
+                                    val index = uiState.displayedMatchIndex.coerceIn(0, (count - 1).coerceAtLeast(0))
+                                    val petId = uiState.candidateMatches.getOrNull(index)?.id
+                                        ?: uiState.candidateMatches.first().id
+                                    inputMessage = ""
+                                    onStartAdoption(petId)
+                                } else {
+                                    viewModel.sendMessage(trimmed)
+                                    inputMessage = ""
+                                }
                             }
                         },
                         enabled = !uiState.isTyping && inputMessage.isNotBlank(),
@@ -343,7 +379,8 @@ private fun TypingDots() {
 private fun TopMatchCard(
     uiState: ChatUiState,
     onViewPetDetail: (String) -> Unit,
-    onViewCompatibility: (String) -> Unit
+    onViewCompatibility: (String) -> Unit,
+    onStartAdoption: (String) -> Unit
 ) {
     val count = minOf(uiState.candidateMatches.size, uiState.evaluations.size)
     val index = uiState.displayedMatchIndex.coerceIn(0, (count - 1).coerceAtLeast(0))
@@ -414,6 +451,15 @@ private fun TopMatchCard(
                     ) {
                         Text("Why?")
                     }
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = { onStartAdoption(topMatch.id) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Start Adoption Application")
                 }
             }
         }

@@ -117,6 +117,9 @@ fun PawFectNavGraph(
                 },
                 onViewCompatibility = { petId ->
                     navController.navigate(NavRoute.Compatibility.createRoute(petId))
+                },
+                onStartAdoption = { petId ->
+                    navController.navigate(NavRoute.AdoptionStepper.createRoute(petId))
                 }
             )
         }

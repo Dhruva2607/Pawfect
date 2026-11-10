@@ -25,9 +25,13 @@ class IntakeAnalysisOutput(BaseModel):
         ...,
         description="True if we have enough info (species, living space, energy/activity level, family setup) to find matches"
     )
+    is_unsupported_or_irrelevant: bool = Field(
+        default=False,
+        description="True if the user is asking for pets other than cats/dogs (e.g. parrots, birds, reptiles, fish, rabbits, etc.) or asking off-topic/irrelevant questions."
+    )
     follow_up_question: str = Field(
         ...,
-        description="Warm, conversational follow-up question asking about missing dimensions, or empty string if ready"
+        description="Warm, conversational follow-up question. If is_unsupported_or_irrelevant is True, inform the user that PawFect is only an adoption center for cats and dogs, and ask if they are looking to adopt a dog or cat instead."
     )
     suggested_quick_replies: List[str] = Field(
         default_factory=list,
@@ -100,6 +104,14 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
     system_prompt = (
         "You are an empathetic, expert Pet Adoption Counselor for 'PawFect'.\n"
         "Your mission is to understand an adopter's real lifestyle to ensure a long-term, stable pet adoption.\n\n"
+        "STRICT CENTER SCOPE & RELEVANCE RULE:\n"
+        "- PawFect is EXCLUSIVELY an adoption center for CATS and DOGS.\n"
+        "- We do NOT have, shelter, adopt, or sell any other animals (such as parrots, birds, reptiles, rabbits, hamsters, turtles, fish, ferrets, etc.).\n"
+        "- If the user asks an irrelevant question (e.g. trivia, coding, off-topic banter) OR asks if we have or adopt non-cat/non-dog pets (like parrots, birds, reptiles, rabbits, etc.):\n"
+        "  1. Set is_unsupported_or_irrelevant=True and is_sufficient_for_search=False.\n"
+        "  2. In follow_up_question, state politely and clearly that PawFect is only an adoption center for cats and dogs, and ask if they are looking to adopt a dog or a cat instead.\n"
+        "  3. Set suggested_quick_replies to ['Looking for a Dog', 'Looking for a Cat'].\n"
+        "  4. Do NOT set species constraint to any unsupported animal.\n\n"
         "CRITICAL DIMENSIONS NEEDED BEFORE MATCHING:\n"
         "1. Desired Species: Dog, Cat, or either?\n"
         "2. Living Environment: Apartment, house with private yard, house without yard?\n"
@@ -109,11 +121,11 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         "6. Allergies / Sensitivities: Any need for low-shedding or hypoallergenic pets?\n\n"
         "INSTRUCTIONS:\n"
         "- Merge all previously extracted constraints with any newly shared facts in the conversation.\n"
-        "- The newest user message ALWAYS wins: if the user asks for a different species than before, update species to the newly requested one.\n"
+        "- The newest user message ALWAYS wins: if the user asks for a different species than before, update species to the newly requested one (only 'dog', 'cat', or 'any').\n"
         "- Determine if we have at least 3-4 core dimensions (specifically species, housing, and energy/family).\n"
         "- If NOT sufficient yet, ask ONE natural, warm, conversational question covering the most important missing details.\n"
         "- Provide 2-4 short quick-reply options (e.g. ['Dog', 'Cat', 'Either is fine'] or ['Apartment', 'House with yard']).\n"
-        "- If SUFFICIENT, set is_sufficient_for_search=True and synthesize a comprehensive semantic search_query summarizing their lifestyle."
+        "- If SUFFICIENT and RELEVANT, set is_sufficient_for_search=True and synthesize a comprehensive semantic search_query summarizing their lifestyle."
     )
 
     human_prompt = (
@@ -130,6 +142,24 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": human_prompt}
         ])
+
+        if analysis.is_unsupported_or_irrelevant:
+            response_msg = analysis.follow_up_question
+            lower_resp = response_msg.lower()
+            if "cat" not in lower_resp or "dog" not in lower_resp:
+                response_msg = (
+                    "PawFect is exclusively an adoption center for cats and dogs! "
+                    "We do not have parrots, birds, or other animals available for adoption. "
+                    "Would you like help finding a loving dog or cat to adopt?"
+                )
+            quick_replies = analysis.suggested_quick_replies or ["Looking for a Dog", "Looking for a Cat"]
+            return {
+                "extracted_constraints": prior_constraints,
+                "is_complete": False,
+                "response_message": response_msg,
+                "quick_replies": quick_replies,
+                "next_node": "await_user"
+            }
 
         updated_constraints = analysis.extracted_constraints.model_dump(exclude_none=True)
         # Merge with prior, then let an explicit species request in the newest message win
