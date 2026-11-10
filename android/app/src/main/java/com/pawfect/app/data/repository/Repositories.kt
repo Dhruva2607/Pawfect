@@ -84,7 +84,7 @@ class ChatRepository @Inject constructor(
 }
 
 /**
- * Adoption Repository: handles application submission and 4-stage stepper status.
+ * Adoption Repository: handles application submission and status.
  * [FROM MARKDOWN: Step 3.2]
  */
 @Singleton

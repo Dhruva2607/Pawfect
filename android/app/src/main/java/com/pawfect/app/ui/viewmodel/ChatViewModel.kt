@@ -38,6 +38,7 @@ data class ChatUiState(
     val isComplete: Boolean = false,
     val candidateMatches: List<PetDto> = emptyList(),
     val evaluations: List<PetEvaluationDto> = emptyList(),
+    val displayedMatchIndex: Int = 0,
     val sessionId: String,
     val error: String? = null
 )
@@ -91,6 +92,7 @@ class ChatViewModel @Inject constructor(
                 quickReplies = emptyList(),
                 candidateMatches = emptyList(),
                 evaluations = emptyList(),
+                displayedMatchIndex = 0,
                 isComplete = false,
                 error = null
             )
@@ -131,6 +133,7 @@ class ChatViewModel @Inject constructor(
                                     it.copy(
                                         candidateMatches = event.candidateMatches,
                                         evaluations = event.evaluations,
+                                        displayedMatchIndex = 0,
                                         isComplete = true
                                     )
                                 }
@@ -201,6 +204,22 @@ class ChatViewModel @Inject constructor(
                 }
                 persistMessages()
             }
+        }
+    }
+
+    /**
+     * Cycles the visible recommendation through the candidates already returned
+     * by the backend, so "See other matches" shows a genuinely different pet
+     * instead of asking the model for the same result again.
+     */
+    fun showNextMatch() {
+        val count = minOf(
+            _uiState.value.candidateMatches.size,
+            _uiState.value.evaluations.size
+        )
+        if (count <= 1) return
+        _uiState.update {
+            it.copy(displayedMatchIndex = (it.displayedMatchIndex + 1) % count)
         }
     }
 

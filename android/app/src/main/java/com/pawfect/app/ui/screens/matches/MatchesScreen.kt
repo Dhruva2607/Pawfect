@@ -2,7 +2,17 @@ package com.pawfect.app.ui.screens.matches
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -12,32 +22,47 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.pawfect.app.data.model.PetDto
 import com.pawfect.app.ui.components.CircularMatchGauge
+import com.pawfect.app.ui.components.PawEmptyState
+import com.pawfect.app.ui.components.PawErrorState
+import com.pawfect.app.ui.components.PawLogo
+import com.pawfect.app.ui.components.PawSectionHeader
+import com.pawfect.app.ui.components.PawSkeleton
+import com.pawfect.app.ui.components.PawTag
+import com.pawfect.app.ui.components.PetImage
 import com.pawfect.app.ui.theme.AccentCoral
-import com.pawfect.app.ui.theme.BackgroundWarm
 import com.pawfect.app.ui.theme.MatchGreen
-import com.pawfect.app.ui.theme.SurfaceWarm
 import com.pawfect.app.ui.viewmodel.MatchesViewModel
 
-/**
- * Screen 4: Your Perfect Match!
- * [FROM MARKDOWN: Phase 5 - Screen 4]
- * Circular match score gauge (e.g., 96%), lifestyle checkmarks, pet hero photo, favorite heart toggle,
- * "Why Buddy?" explanation summary, and direct "Adopt Me" / "Learn More" CTAs.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MatchesScreen(
@@ -61,114 +86,87 @@ fun MatchesScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        if (savedOnly) "Saved pets"
-                        else if (uiState.evaluationsByPetId.isNotEmpty()) "Your AI matches" else "Meet the pets",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer) {
+                            PawLogo(Modifier.padding(7.dp).size(18.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (savedOnly) "Saved pets"
+                            else if (uiState.evaluationsByPetId.isNotEmpty()) "Your AI matches" else "Meet the pets",
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                    }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.loadMatches(savedOnly) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceWarm)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = BackgroundWarm
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        } else if (uiState.error != null) {
-            Column(
-                Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(uiState.error ?: "Something went wrong", textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = { viewModel.loadMatches(savedOnly) }) { Text("Try again") }
-            }
-        } else {
-            val topPet = uiState.topMatch
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                if (topPet != null) {
-                    item {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        HeroMatchCard(
-                            pet = topPet,
-                            matchScore = uiState.evaluationsByPetId[topPet.id]?.compatibilityScore,
-                            isFavorited = topPet.id in uiState.savedPetIds,
-                            onToggleFavorite = { viewModel.toggleFavorite(topPet.id) },
-                            onLearnMore = { onSelectPet(topPet.id) },
-                            onAdoptMe = { onApply(topPet.id) }
-                        )
-                    }
-
-                    item {
-                        Text(
-                            text = if (savedOnly) "Your saved companions"
-                            else if (uiState.evaluationsByPetId.isNotEmpty()) "More matches for you"
-                            else "More companions",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                        )
-                    }
-
-                    items(uiState.otherMatches) { pet ->
-                        CompactPetCard(
-                            pet = pet,
-                            matchScore = uiState.evaluationsByPetId[pet.id]?.compatibilityScore,
-                            isFavorited = pet.id in uiState.savedPetIds,
-                            onToggleFavorite = { viewModel.toggleFavorite(pet.id) },
-                            onClick = { onSelectPet(pet.id) }
-                        )
-                    }
+        when {
+            uiState.isLoading -> MatchesSkeleton(Modifier.fillMaxSize().padding(paddingValues))
+            uiState.error != null -> PawErrorState(
+                message = uiState.error.orEmpty(),
+                onRetry = { viewModel.loadMatches(savedOnly) },
+                modifier = Modifier.fillMaxSize().padding(paddingValues)
+            )
+            else -> {
+                val topPet = uiState.topMatch
+                if (topPet == null) {
+                    PawEmptyState(
+                        title = if (savedOnly) "No saved pets yet" else "No pets to show right now",
+                        message = if (savedOnly) {
+                            "Tap the heart on a pet profile to save it here."
+                        } else {
+                            "Try refreshing or chat with our AI counselor to find a thoughtful match."
+                        },
+                        actionLabel = if (savedOnly) "Find a companion" else "Start a conversation",
+                        onAction = onStartChat,
+                        modifier = Modifier.fillMaxSize().padding(paddingValues)
+                    )
                 } else {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 48.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    if (savedOnly) "No saved pets yet" else "No pets to show right now",
-                                    style = MaterialTheme.typography.titleMedium
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(paddingValues),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        item {
+                            HeroMatchCard(
+                                pet = topPet,
+                                matchScore = uiState.evaluationsByPetId[topPet.id]?.compatibilityScore,
+                                isFavorited = topPet.id in uiState.savedPetIds,
+                                onToggleFavorite = { viewModel.toggleFavorite(topPet.id) },
+                                onLearnMore = { onSelectPet(topPet.id) },
+                                onAdoptMe = { onApply(topPet.id) }
+                            )
+                        }
+                        if (uiState.otherMatches.isNotEmpty()) {
+                            item {
+                                PawSectionHeader(
+                                    title = if (savedOnly) "Your saved companions"
+                                    else if (uiState.evaluationsByPetId.isNotEmpty()) "More matches for you"
+                                    else "More companions"
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    if (savedOnly) "Tap the heart on a pet profile to save it here."
-                                    else "Try refreshing or chat with our AI counselor to find a thoughtful match."
+                            }
+                            items(uiState.otherMatches) { pet ->
+                                CompactPetCard(
+                                    pet = pet,
+                                    matchScore = uiState.evaluationsByPetId[pet.id]?.compatibilityScore,
+                                    isFavorited = pet.id in uiState.savedPetIds,
+                                    onToggleFavorite = { viewModel.toggleFavorite(pet.id) },
+                                    onClick = { onSelectPet(pet.id) }
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(onClick = onStartChat) {
-                                    Text(if (savedOnly) "Find a companion" else "Start a conversation")
-                                }
                             }
                         }
                     }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
@@ -186,136 +184,108 @@ fun HeroMatchCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWarm),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        shape = MaterialTheme.shapes.extraLarge,
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            // Pet Hero Photo + Heart Toggle + Match Gauge overlay
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(240.dp)
-            ) {
-                AsyncImage(
-                    model = pet.photoUrl,
+            Box {
+                PetImage(
+                    url = pet.photoUrl,
                     contentDescription = pet.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxWidth().height(250.dp)
                 )
-
-                // Favorite heart toggle
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color(0xCC0E1A14))
+                            )
+                        )
+                )
                 IconButton(
                     onClick = onToggleFavorite,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(12.dp)
-                        .background(Color.White.copy(alpha = 0.85f), shape = CircleShape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), CircleShape)
                         .size(40.dp)
                 ) {
                     Icon(
-                        imageVector = if (isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                         contentDescription = "Favorite",
-                        tint = if (isFavorited) AccentCoral else Color.Gray
+                        tint = if (isFavorited) AccentCoral else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-
-                // Circular Match Score Gauge [FROM MARKDOWN: Screen 4 - e.g. 96%]
+                Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+                    Text(
+                        pet.name,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "${pet.breed} · ${formatAge(pet.ageMonths)} old · ${pet.gender}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                }
                 if (matchScore != null) {
                     Surface(
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.95f),
-                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)
                     ) {
-                        CircularMatchGauge(
-                            score = matchScore,
-                            size = 72.dp,
-                            strokeWidth = 6.dp
-                        )
+                        CircularMatchGauge(score = matchScore, size = 70.dp, strokeWidth = 6.dp)
                     }
                 }
             }
 
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = pet.name,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${pet.breed} • ${formatAge(pet.ageMonths)} old • ${pet.gender}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+            Column(Modifier.padding(16.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PawTag("Energy ${pet.energyLevel}/5")
+                    if (pet.goodWithKids) PawTag("Kid-friendly")
+                    if (pet.goodWithOtherPets) PawTag("Pet-friendly")
                 }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Lifestyle Checkmarks [FROM MARKDOWN: Screen 4]
+                Spacer(Modifier.height(14.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (matchScore != null) LifestyleCheckItem(text = "AI compatibility: $matchScore%")
-                    LifestyleCheckItem(text = "Energy level: ${pet.energyLevel}/5")
-                    if (pet.goodWithKids) LifestyleCheckItem(text = "Safe & affectionate with children")
-                    if (pet.goodWithOtherPets) LifestyleCheckItem(text = "Socialized with other pets")
-                    LifestyleCheckItem(text = "Suitable for ${pet.housingRequirement.replace('_', ' ')}")
+                    if (matchScore != null) LifestyleCheckItem("AI compatibility: $matchScore%")
+                    LifestyleCheckItem("Suitable for ${pet.housingRequirement.replace('_', ' ')}")
+                    if (pet.goodWithKids) LifestyleCheckItem("Safe and affectionate with children")
                 }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // "Why Buddy?" Explanation Summary [FROM MARKDOWN: Screen 4]
+                Spacer(Modifier.height(14.dp))
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(Modifier.padding(14.dp)) {
                         Text(
-                            text = "Why ${pet.name}?",
+                            "Why ${pet.name}?",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            text = pet.bioText,
+                            pet.bioText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Direct "Adopt Me" / "Learn More" CTAs [FROM MARKDOWN: Screen 4]
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(
                         onClick = onLearnMore,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                    ) {
-                        Text("Learn More")
-                    }
-
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) { Text("Learn more") }
                     Button(
                         onClick = onAdoptMe,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Adopt Me 🐾")
-                    }
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) { Text("Apply to adopt") }
                 }
             }
         }
@@ -326,12 +296,12 @@ fun HeroMatchCard(
 fun LifestyleCheckItem(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            imageVector = Icons.Default.CheckCircle,
+            imageVector = Icons.Filled.CheckCircle,
             contentDescription = null,
             tint = MatchGreen,
             modifier = Modifier.size(18.dp)
         )
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(Modifier.width(8.dp))
         Text(text = text, style = MaterialTheme.typography.bodyMedium)
     }
 }
@@ -345,33 +315,29 @@ fun CompactPetCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWarm)
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = pet.photoUrl,
+            PetImage(
+                url = pet.photoUrl,
                 contentDescription = pet.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                modifier = Modifier.size(84.dp).clip(RoundedCornerShape(14.dp))
             )
-
-            Spacer(modifier = Modifier.width(14.dp))
-
+            Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(pet.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("${pet.breed} • ${pet.gender}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(
+                    "${pet.breed} · ${pet.gender}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 if (matchScore != null) {
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         "$matchScore% match",
                         style = MaterialTheme.typography.labelSmall,
@@ -379,21 +345,27 @@ fun CompactPetCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = pet.temperament.take(2).joinToString(" • "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Spacer(Modifier.height(6.dp))
+                PawTag(pet.temperament.firstOrNull() ?: pet.species)
             }
-
             IconButton(onClick = onToggleFavorite) {
                 Icon(
-                    imageVector = if (isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                     contentDescription = "Favorite",
-                    tint = if (isFavorited) AccentCoral else Color.Gray
+                    tint = if (isFavorited) AccentCoral else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun MatchesSkeleton(modifier: Modifier = Modifier) {
+    Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        PawSkeleton(Modifier.fillMaxWidth().height(250.dp), MaterialTheme.shapes.extraLarge)
+        PawSkeleton(Modifier.fillMaxWidth(0.55f).height(24.dp))
+        repeat(3) {
+            PawSkeleton(Modifier.fillMaxWidth().height(96.dp), MaterialTheme.shapes.large)
         }
     }
 }

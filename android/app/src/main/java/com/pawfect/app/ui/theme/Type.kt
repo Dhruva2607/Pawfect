@@ -6,46 +6,109 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
+// Editorial serif for display and headings; clean sans for UI and body.
+val DisplayFamily = FontFamily.Serif
+val BodyFamily = FontFamily.SansSerif
+
 val Typography = Typography(
-    headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+    displayLarge = TextStyle(
+        fontFamily = DisplayFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
-        color = TextPrimary
+        fontSize = 48.sp,
+        lineHeight = 52.sp,
+        letterSpacing = (-1.2).sp
+    ),
+    displayMedium = TextStyle(
+        fontFamily = DisplayFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 40.sp,
+        lineHeight = 44.sp,
+        letterSpacing = (-0.9).sp
+    ),
+    displaySmall = TextStyle(
+        fontFamily = DisplayFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 34.sp,
+        lineHeight = 39.sp,
+        letterSpacing = (-0.6).sp
+    ),
+    headlineLarge = TextStyle(
+        fontFamily = DisplayFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 30.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.4).sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = DisplayFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 26.sp,
+        lineHeight = 32.sp,
+        letterSpacing = (-0.3).sp
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = DisplayFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp,
         lineHeight = 28.sp,
-        color = TextPrimary
+        letterSpacing = (-0.2).sp
     ),
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = BodyFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-        color = TextPrimary
+        fontSize = 19.sp,
+        lineHeight = 25.sp,
+        letterSpacing = (-0.1).sp
     ),
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
+    titleMedium = TextStyle(
+        fontFamily = BodyFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 22.sp
     ),
+    titleSmall = TextStyle(
+        fontFamily = BodyFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp
+    ),
+    bodyLarge = TextStyle(
+        fontFamily = BodyFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp
+    ),
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = BodyFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
-        lineHeight = 20.sp,
-        color = TextSecondary
+        lineHeight = 21.sp
+    ),
+    bodySmall = TextStyle(
+        fontFamily = BodyFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.5.sp,
+        lineHeight = 18.sp
+    ),
+    labelLarge = TextStyle(
+        fontFamily = BodyFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.1.sp
+    ),
+    labelMedium = TextStyle(
+        fontFamily = BodyFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.2.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = BodyFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
-        lineHeight = 16.sp,
-        color = TextMuted
+        lineHeight = 15.sp,
+        letterSpacing = 0.3.sp
     )
 )

@@ -1,15 +1,20 @@
 package com.pawfect.app.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
@@ -18,11 +23,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pawfect.app.ui.theme.MatchAmber
 import com.pawfect.app.ui.theme.MatchGreen
+import com.pawfect.app.ui.theme.MatchRed
 
 /**
  * Circular Match Score Gauge.
- * [FROM MARKDOWN: Screen 4 & Screen 6]
- * Shows animated circular percentage (e.g. 96%, 92%) with dynamic color-coding.
+ * Animated 0–100% arc with a tonal track and colour-coded score.
  */
 @Composable
 fun CircularMatchGauge(
@@ -31,35 +36,31 @@ fun CircularMatchGauge(
     size: Dp = 100.dp,
     strokeWidth: Dp = 8.dp
 ) {
+    val safeScore = score.coerceIn(0, 100)
     val animatedProgress = remember { Animatable(0f) }
-
-    LaunchedEffect(score) {
+    LaunchedEffect(safeScore) {
         animatedProgress.animateTo(
-            targetValue = score / 100f,
-            animationSpec = tween(durationMillis = 1000)
+            targetValue = safeScore / 100f,
+            animationSpec = tween(durationMillis = 900, easing = FastOutSlowInEasing)
         )
     }
 
     val scoreColor = when {
-        score >= 85 -> MatchGreen
-        score >= 70 -> MatchAmber
-        else -> Color(0xFFEF4444)
+        safeScore >= 85 -> MatchGreen
+        safeScore >= 70 -> MatchAmber
+        else -> MatchRed
     }
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
-    Box(
-        modifier = modifier.size(size),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Background track circle
             drawArc(
-                color = Color.LightGray.copy(alpha = 0.3f),
+                color = trackColor,
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
                 style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
             )
-            // Animated score arc
             drawArc(
                 color = scoreColor,
                 startAngle = -90f,
@@ -68,24 +69,22 @@ fun CircularMatchGauge(
                 style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
             )
         }
-
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "$score%",
-                style = MaterialTheme.typography.titleLarge.copy(
+                text = "$safeScore%",
+                style = MaterialTheme.typography.headlineSmall.copy(
                     fontSize = (size.value * 0.26).sp,
-                    fontWeight = FontWeight.Bold,
-                    color = scoreColor
-                )
+                    fontWeight = FontWeight.Bold
+                ),
+                color = scoreColor
             )
             Text(
-                text = "Match",
+                text = "match",
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = (size.value * 0.11).sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    fontSize = (size.value * 0.105).sp
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
-
