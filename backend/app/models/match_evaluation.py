@@ -16,6 +16,7 @@ class MatchEvaluation(BaseModel):
     pros: List[str] = Field(default_factory=list, description="Exact alignment points (e.g. 'Your activity level matches his energy')")
     caveats: List[str] = Field(default_factory=list, description="Potential lifestyle friction points or watch-outs")
     reasoning_summary: Optional[str] = Field(None, description="Concise narrative summary of evaluation")
+    comparison_to_hero: Optional[str] = Field(None, description="Why this pet is not as perfect a match compared to hero pet")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     model_config = {

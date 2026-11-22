@@ -6,7 +6,7 @@ LangGraph Nodes: Conversational Intake, Hybrid Retrieval, and Reasoning & Scorin
 import json
 import logging
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 
 from app.services.state import MatchmakerState, LifestyleConstraints
@@ -31,11 +31,24 @@ class IntakeAnalysisOutput(BaseModel):
     )
     follow_up_question: str = Field(
         ...,
-        description="Warm, conversational follow-up question. If is_unsupported_or_irrelevant is True, inform the user that PawFect is only an adoption center for cats and dogs, and ask if they are looking to adopt a dog or cat instead."
+        description=(
+            "Warm, conversational follow-up question. "
+            "CRITICAL: MUST ASK EXACTLY ONE FOCUSED QUESTION at a time. "
+            "Never combine multiple questions. "
+            "If is_unsupported_or_irrelevant is True, inform the user that PawFect is only an adoption center for cats and dogs, and ask if they are looking to adopt a dog or cat instead."
+        )
     )
     suggested_quick_replies: List[str] = Field(
         default_factory=list,
-        description="2-4 concise suggested quick-reply chips for mobile UI"
+        description=(
+            "Concise suggested quick-reply chips for mobile UI. "
+            "CRITICAL: Must provide direct, complete options that fully answer the ONE question asked in follow_up_question, "
+            "so the user can tap a suggestion instead of typing. "
+            "For example, if asking species: ['Looking for a Dog', 'Looking for a Cat', 'Open to either']. "
+            "If asking home: ['Apartment', 'House with yard', 'House without yard']. "
+            "If asking activity: ['Calm / low energy', 'Moderate daily walks', 'Active & energetic']. "
+            "If asking kids/pets: ['No kids or pets', 'Have children', 'Have other pets', 'Have kids and pets']."
+        )
     )
     search_query: str = Field(
         default="",
@@ -51,6 +64,10 @@ class SinglePetCompatibility(BaseModel):
     pros: List[str] = Field(..., description="Exact alignment points with adopter's lifestyle")
     caveats: List[str] = Field(..., description="Watch-outs, behavioral considerations, or potential frictions")
     reasoning_summary: str = Field(..., description="1-2 sentence warm, grounded explanation")
+    comparison_to_hero: Optional[str] = Field(
+        default=None,
+        description="For candidate matches ranked below the #1 top Hero pet, provide a clear 1-sentence comparison explaining specifically why this pet is not as perfect a match compared to the top Hero pet (e.g. higher activity/exercise requirement, requires a yard unlike the apartment-friendly hero pet, or needs specialized training). Must be null for the #1 top match itself."
+    )
 
 
 class MultiPetScoringOutput(BaseModel):
@@ -58,7 +75,7 @@ class MultiPetScoringOutput(BaseModel):
     evaluations: List[SinglePetCompatibility]
     overall_response: str = Field(
         ...,
-        description="Warm, empathetic message introducing the top pet match and highlights"
+        description="Warm, empathetic message introducing the top pet match (Hero Pet) and briefly noting the alternative matches along with why each is not as perfect a match compared to the top pet (e.g. 'Meet Bella, your #1 match! While Charlie and Max are also wonderful, Charlie requires significantly more yard space and Max has higher energy demands than your apartment routine.')."
     )
 
 
@@ -112,6 +129,14 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         "  2. In follow_up_question, state politely and clearly that PawFect is only an adoption center for cats and dogs, and ask if they are looking to adopt a dog or a cat instead.\n"
         "  3. Set suggested_quick_replies to ['Looking for a Dog', 'Looking for a Cat'].\n"
         "  4. Do NOT set species constraint to any unsupported animal.\n\n"
+        "CRITICAL ONE-QUESTION-AT-A-TIME & MATCHING SUGGESTIONS RULE:\n"
+        "- When requesting more information, ask EXACTLY ONE focused question at a time. NEVER combine multiple questions into one message.\n"
+        "- Provide 2 to 4 concise suggested_quick_replies that DIRECTLY and FULLY answer that ONE question, so the adopter can simply tap an option instead of typing.\n"
+        "- Example mappings for questions and their matching suggestions:\n"
+        "  * Missing Species: follow_up_question='Are you looking to adopt a dog or a cat?' -> suggested_quick_replies=['Looking for a Dog', 'Looking for a Cat', 'Open to either']\n"
+        "  * Missing Housing: follow_up_question='What kind of living space do you have?' -> suggested_quick_replies=['Apartment', 'House with yard', 'House without yard']\n"
+        "  * Missing Activity/Energy: follow_up_question='What activity level fits your daily routine best?' -> suggested_quick_replies=['Calm & low energy', 'Moderate daily walks', 'High energy & active']\n"
+        "  * Missing Household/Pets: follow_up_question='Do you have any children or other pets at home?' -> suggested_quick_replies=['No children or other pets', 'Have young children', 'Have other pets', 'Have children & pets']\n\n"
         "CRITICAL DIMENSIONS NEEDED BEFORE MATCHING:\n"
         "1. Desired Species: Dog, Cat, or either?\n"
         "2. Living Environment: Apartment, house with private yard, house without yard?\n"
@@ -123,8 +148,7 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         "- Merge all previously extracted constraints with any newly shared facts in the conversation.\n"
         "- The newest user message ALWAYS wins: if the user asks for a different species than before, update species to the newly requested one (only 'dog', 'cat', or 'any').\n"
         "- Determine if we have at least 3-4 core dimensions (specifically species, housing, and energy/family).\n"
-        "- If NOT sufficient yet, ask ONE natural, warm, conversational question covering the most important missing details.\n"
-        "- Provide 2-4 short quick-reply options (e.g. ['Dog', 'Cat', 'Either is fine'] or ['Apartment', 'House with yard']).\n"
+        "- If NOT sufficient yet, ask EXACTLY ONE natural, conversational question covering the most important missing detail with matching quick replies.\n"
         "- If SUFFICIENT and RELEVANT, set is_sufficient_for_search=True and synthesize a comprehensive semantic search_query summarizing their lifestyle."
     )
 
@@ -194,12 +218,25 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error("Error in conversational intake node: %s. Using graceful heuristic fallback.", e)
-        # Graceful heuristic fallback
+        # Smart heuristic fallback: ask for the first missing dimension with matching suggestions
+        if not prior_constraints.get("species"):
+            fallback_q = "Are you looking to adopt a dog or a cat?"
+            fallback_qr = ["Looking for a Dog", "Looking for a Cat", "Open to either"]
+        elif not prior_constraints.get("housing_type"):
+            fallback_q = "What kind of home do you have?"
+            fallback_qr = ["Apartment", "House with yard", "House without yard"]
+        elif not prior_constraints.get("energy_budget"):
+            fallback_q = "What activity level fits your lifestyle best?"
+            fallback_qr = ["Calm & low energy", "Moderate daily walks", "High energy & active"]
+        else:
+            fallback_q = "Do you have any children or other pets at home?"
+            fallback_qr = ["No children or pets", "Have young children", "Have other pets", "Have children & pets"]
+
         return {
             "extracted_constraints": prior_constraints,
             "is_complete": False,
-            "response_message": "Tell me a little about your living space (apartment or house with a yard) and how much time you spend on daily walks!",
-            "quick_replies": ["Apartment, moderate walks", "House with yard, very active", "Apartment, calm cuddles"],
+            "response_message": fallback_q,
+            "quick_replies": fallback_qr,
             "next_node": "await_user"
         }
 
@@ -220,7 +257,7 @@ def hybrid_retrieval_node(state: MatchmakerState) -> Dict[str, Any]:
     candidates = hybrid_search_pets(
         query_text=query_text,
         constraints=constraints,
-        top_k=4
+        top_k=3
     )
 
     return {
@@ -238,7 +275,7 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
     Enforces strict grounding (0.1 temp) [FROM MARKDOWN: Step 6.1] and structured Pydantic output.
     """
     constraints = state.get("extracted_constraints", {})
-    candidates = state.get("candidate_matches", [])
+    candidates = state.get("candidate_matches", [])[:3]
 
     if not candidates:
         logger.warning("No candidate pets found for scoring.")
@@ -274,14 +311,16 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
         "You are the Lead Adoption Counselor and Compatibility Engine for PawFect.\n"
         "Your task is to analyze candidate shelter pets and calculate grounded, explainable compatibility scores.\n\n"
         "STRICT GROUNDING RULES [GUARDRAILS - NO HALLUCINATIONS]:\n"
-        "1. Use ONLY the pet profile data provided in the candidate dossier. Do NOT invent medical conditions, behavioral traits, or training.\n"
+        "1. Use ONLY the pet profile data provided in the candidate dossier. Do NOT invent traits.\n"
         "2. Compatibility Score must be between 0 and 100%:\n"
         "   - 85-99%: High alignment across housing, energy, kids, and pets.\n"
         "   - 70-84%: Good alignment with minor lifestyle adjustments needed.\n"
         "   - Below 70%: Noticeable mismatch on energy, space, or household safety.\n"
-        "3. Pros: Provide 2-3 specific, exact statements (e.g., 'Your activity level matches his energy', 'Family setup is ideal for his gentle nature').\n"
-        "4. Caveats: Provide 1-2 realistic watch-outs based directly on pet's exercise needs or known triggers.\n"
-        "5. Overall response: Warm, encouraging message presenting the #1 top match to the adopter."
+        "3. Pros: Provide 1-2 concise bullet points.\n"
+        "4. Caveats: Provide 1 concise bullet point.\n"
+        "5. Reasoning summary: 1 brief sentence.\n"
+        "6. Comparison to #1 Hero Match: For candidate rank #1 (the Hero Pet), comparison_to_hero MUST be None. For all other candidate matches (rank #2 and lower), provide 1 clear, objective sentence in comparison_to_hero explaining specifically why they are not as perfect a match compared to the #1 Hero Pet (e.g., energy level differences, specific space/housing constraints, or behavioral needs).\n"
+        "7. Overall response: Warm, encouraging message presenting the #1 Hero Match to the adopter, and briefly summarizing the alternative matches explaining why each is not quite as perfect a fit compared to the hero pet."
     )
 
     human_prompt = (
@@ -304,6 +343,14 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
         evaluations_dict.sort(key=lambda x: x["compatibility_score"], reverse=True)
 
         top_match_name = evaluations_dict[0]["pet_name"] if evaluations_dict else "your match"
+
+        # Guarantee comparison_to_hero rules: rank #1 has None, rank #2+ has comparative reason
+        for idx, ev in enumerate(evaluations_dict):
+            if idx == 0:
+                ev["comparison_to_hero"] = None
+            elif not ev.get("comparison_to_hero"):
+                caveat = (ev.get("caveats") or ["higher activity or space needs"])[0]
+                ev["comparison_to_hero"] = f"Compared to {top_match_name}, {ev['pet_name']} has {caveat.lower()}."
 
         return {
             "evaluations": evaluations_dict,
@@ -335,9 +382,22 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
         fallback_evals.sort(key=lambda x: x["compatibility_score"], reverse=True)
         top_name = fallback_evals[0]["pet_name"] if fallback_evals else "your match"
 
+        for idx, ev in enumerate(fallback_evals):
+            if idx == 0:
+                ev["comparison_to_hero"] = None
+            else:
+                caveat = (ev.get("caveats") or ["higher exercise needs"])[0]
+                ev["comparison_to_hero"] = f"Compared to {top_name}, {ev['pet_name']} has {caveat.lower()}."
+
+        if len(fallback_evals) > 1:
+            alt_notes = [f"{ev['pet_name']} ({ev['comparison_to_hero']})" for ev in fallback_evals[1:]]
+            alt_text = f" While other options like {', '.join(alt_notes)} are also available, {top_name} remains your best overall match!"
+        else:
+            alt_text = ""
+
         return {
             "evaluations": fallback_evals,
-            "response_message": f"I found wonderful companion matches for your lifestyle! Meet {top_name}, your top candidate.",
+            "response_message": f"I found wonderful companion matches for your lifestyle! Meet {top_name}, your top candidate.{alt_text}",
             "quick_replies": [f"View {top_name}", "See other matches", "Apply to Adopt"]
         }
 

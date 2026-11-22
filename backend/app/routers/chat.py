@@ -54,9 +54,10 @@ async def _save_session_data(
     user_message: str,
     bot_message: str,
     constraints: dict,
-    checkpoint: dict
+    checkpoint: dict,
+    evaluations: Optional[list] = None
 ):
-    """Persists conversation history and state checkpoint in MongoDB user_sessions."""
+    """Persists conversation history, state checkpoint in user_sessions, and grounded evals in match_evaluations."""
     db = get_async_db()
     now = datetime.now(timezone.utc)
 
@@ -85,6 +86,25 @@ async def _save_session_data(
         },
         upsert=True
     )
+
+    if evaluations:
+        for ev in evaluations:
+            pet_id = ev.get("pet_id")
+            if pet_id:
+                await db["match_evaluations"].update_one(
+                    {"session_id": session_id, "pet_id": pet_id},
+                    {"$set": {
+                        "session_id": session_id,
+                        "pet_id": pet_id,
+                        "compatibility_score": ev.get("compatibility_score", 85),
+                        "pros": ev.get("pros", []),
+                        "caveats": ev.get("caveats", []),
+                        "reasoning_summary": ev.get("reasoning_summary", ""),
+                        "comparison_to_hero": ev.get("comparison_to_hero"),
+                        "evaluated_at": now.isoformat()
+                    }},
+                    upsert=True
+                )
 
 
 async def _generate_sse_stream(
@@ -143,7 +163,7 @@ async def _generate_sse_stream(
             "event": "token",
             "data": json.dumps({"event": "token", "token": chunk, "session_id": session_id})
         }
-        await asyncio.sleep(0.02)  # Natural typing rhythm
+        await asyncio.sleep(0.005)  # Fast natural typing rhythm
 
     # 4. If quick replies exist, emit quick-reply chips
     if quick_replies:
@@ -172,7 +192,8 @@ async def _generate_sse_stream(
             user_message=user_message,
             bot_message=response_text,
             constraints=updated_constraints,
-            checkpoint={"is_complete": is_complete}
+            checkpoint={"is_complete": is_complete},
+            evaluations=evaluations
         )
     except Exception:
         logger.exception("Could not save chat session %s.", session_id)
@@ -252,6 +273,8 @@ async def send_chat_message(
     response_text = result_state.get("response_message", "")
     updated_constraints = result_state.get("extracted_constraints", prior_constraints)
 
+    evaluations = result_state.get("evaluations", [])
+
     try:
         await _save_session_data(
             session_id=request_data.session_id,
@@ -259,7 +282,8 @@ async def send_chat_message(
             user_message=request_data.message,
             bot_message=response_text,
             constraints=updated_constraints,
-            checkpoint={"is_complete": result_state.get("is_complete", False)}
+            checkpoint={"is_complete": result_state.get("is_complete", False)},
+            evaluations=evaluations
         )
     except Exception:
         logger.exception("Could not save chat session %s.", request_data.session_id)

@@ -45,7 +45,8 @@ data class DirectEvalResponseDto(
     @SerialName("compatibility_score") val compatibilityScore: Int,
     val pros: List<String> = emptyList(),
     val caveats: List<String> = emptyList(),
-    @SerialName("reasoning_summary") val reasoningSummary: String
+    @SerialName("reasoning_summary") val reasoningSummary: String,
+    @SerialName("comparison_to_hero") val comparisonToHero: String? = null
 )
 
 @Serializable

@@ -271,15 +271,6 @@ fun PetDetailScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedButton(
-                        onClick = onStartAdoptionChat,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Text("Ask the AI matchmaker about ${pet.name}")
-                    }
-
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }

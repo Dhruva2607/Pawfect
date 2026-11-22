@@ -38,6 +38,7 @@ class DirectEvalResponse(BaseModel):
     pros: List[str]
     caveats: List[str]
     reasoning_summary: str
+    comparison_to_hero: Optional[str] = None
 
 
 @router.post("/direct-eval", response_model=DirectEvalResponse, summary="Direct Compatibility Evaluation")
@@ -58,6 +59,23 @@ async def direct_eval(request: DirectEvalRequest):
         )
 
     pet = Pet(**pet_doc)
+
+    # 1. Reuse existing grounded evaluation from matchmaker session if already computed
+    if hasattr(db["match_evaluations"], "find_one"):
+        existing_eval = await db["match_evaluations"].find_one({
+            "session_id": request.session_id,
+            "pet_id": request.pet_id
+        })
+        if existing_eval:
+            return DirectEvalResponse(
+                pet_id=pet.id,
+                pet_name=pet.name,
+                compatibility_score=existing_eval["compatibility_score"],
+                pros=existing_eval.get("pros", []),
+                caveats=existing_eval.get("caveats", []),
+                reasoning_summary=existing_eval.get("reasoning_summary", ""),
+                comparison_to_hero=existing_eval.get("comparison_to_hero")
+            )
 
     # Prepare grounding dossier
     dossier = {
@@ -130,13 +148,25 @@ async def direct_eval(request: DirectEvalRequest):
             reasoning_summary=f"{pet.name} is a wonderful {pet.breed} to consider for your home."
         )
 
+    comparison_to_hero = eval_result.comparison_to_hero
+    if not comparison_to_hero and hasattr(db["match_evaluations"], "find_one"):
+        hero_doc = await db["match_evaluations"].find_one(
+            {"session_id": request.session_id, "pet_id": {"$ne": pet.id}},
+            sort=[("compatibility_score", -1)]
+        )
+        if hero_doc and hero_doc.get("compatibility_score", 0) > eval_result.compatibility_score:
+            hero_pet_doc = await db["pets"].find_one({"_id": hero_doc.get("pet_id")})
+            hero_name = hero_pet_doc.get("name") if hero_pet_doc else "top match"
+            comparison_to_hero = f"Compared to {hero_name}, {pet.name} has slightly different activity and environment requirements."
+
     eval_record = MatchEvaluation(
         session_id=request.session_id,
         pet_id=pet.id,
         compatibility_score=eval_result.compatibility_score,
         pros=eval_result.pros,
         caveats=eval_result.caveats,
-        reasoning_summary=eval_result.reasoning_summary
+        reasoning_summary=eval_result.reasoning_summary,
+        comparison_to_hero=comparison_to_hero
     )
     await db["match_evaluations"].update_one(
         {"session_id": request.session_id, "pet_id": pet.id},
@@ -150,5 +180,6 @@ async def direct_eval(request: DirectEvalRequest):
         compatibility_score=eval_result.compatibility_score,
         pros=eval_result.pros,
         caveats=eval_result.caveats,
-        reasoning_summary=eval_result.reasoning_summary
+        reasoning_summary=eval_result.reasoning_summary,
+        comparison_to_hero=comparison_to_hero
     )

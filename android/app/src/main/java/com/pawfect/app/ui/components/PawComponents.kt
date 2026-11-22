@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -39,9 +40,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.pawfect.app.BuildConfig
 
 /**
  * PawFect's brand mark: a soft paw printed in the current accent.
@@ -76,6 +80,30 @@ fun PetImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
+    val context = LocalContext.current
+    val fullUrl = remember(url) {
+        val sanitized = when {
+            url.isNullOrBlank() -> null
+            url.contains("photo-1513360309081-38a60b9d997c") -> "https://images.unsplash.com/photo-1533743983669-94fa5c4338ec"
+            url.contains("photo-1529429617124-95b104e86bcd") -> "https://images.unsplash.com/photo-1587300003388-59208cc962cb"
+            else -> url
+        }
+
+        if (sanitized == null) null
+        else if (sanitized.startsWith("http://") || sanitized.startsWith("https://")) {
+            if (sanitized.contains("unsplash.com") && !sanitized.contains("w=")) {
+                val sep = if (sanitized.contains("?")) "&" else "?"
+                "$sanitized${sep}auto=format&fit=crop&w=800&q=80"
+            } else {
+                sanitized
+            }
+        } else {
+            val base = BuildConfig.API_BASE_URL.removeSuffix("api/v1/").removeSuffix("/")
+            val path = if (sanitized.startsWith("/")) sanitized else "/$sanitized"
+            "$base$path"
+        }
+    }
+
     Box(
         modifier = modifier.background(
             Brush.linearGradient(
@@ -92,12 +120,17 @@ fun PetImage(
                 .size(36.dp),
             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
         )
-        AsyncImage(
-            model = url,
-            contentDescription = contentDescription,
-            contentScale = contentScale,
-            modifier = Modifier.fillMaxSize()
-        )
+        if (!fullUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(fullUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = contentDescription,
+                contentScale = contentScale,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 

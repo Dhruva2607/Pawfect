@@ -343,7 +343,7 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
         "quirks": ["Carries your clean socks as welcoming gifts", "Cannot pass any puddle without dipping toes"],
         "exercise_needs": "60 minutes daily walks, retrieval, and dock swimming",
         "triggers": ["None noted - very resilient temperament"],
-        "photo_url": "https://images.unsplash.com/photo-1529429617124-95b104e86bcd"
+        "photo_url": "https://images.unsplash.com/photo-1587300003388-59208cc962cb"
     },
     {
         "_id": "pet_dog_018",
@@ -401,7 +401,7 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
         "quirks": ["Has a distinct vocal tone for every situation", "Rides on human shoulders around the house"],
         "exercise_needs": "30 minutes daily climbing and puzzle ball hunting",
         "triggers": ["Closed bedroom doors"],
-        "photo_url": "https://images.unsplash.com/photo-1513360309081-38a60b9d997c"
+        "photo_url": "https://images.unsplash.com/photo-1568152950566-c1bf43f4ab28"
     },
     {
         "_id": "pet_cat_021",
@@ -553,7 +553,7 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
         "quirks": ["Eats kibble one piece at a time with polite delicacy", "Loves silk pillows and soft rugs"],
         "exercise_needs": "10 minutes gentle batting at wool balls",
         "triggers": ["Chaotic noise, sudden toddler grabs"],
-        "photo_url": "https://images.unsplash.com/photo-1518791841217-8f162f1e1131"
+        "photo_url": "https://images.unsplash.com/photo-1583795128727-6ec3642408f8"
     },
     # ── Additional Diverse Pets (35+ total) ───────────────────────────
     {
@@ -611,7 +611,7 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
         "quirks": ["Does an excited happy-dance whenever someone enters the room", "Snores like a tiny outboard motor"],
         "exercise_needs": "20 minutes light stroll in cool parts of the day",
         "triggers": ["Hot humid weather (brachycephalic)"],
-        "photo_url": "https://images.unsplash.com/photo-1517849845537-4d257902454a"
+        "photo_url": "https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9"
     },
     {
         "_id": "pet_dog_032",
@@ -630,7 +630,7 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
         "quirks": ["Virtually silent—never barks at postal workers", "Shivers politely asking for her winter fleece coat"],
         "exercise_needs": "35 minutes daily walk plus an enclosed sprint session",
         "triggers": ["Off-leash areas without secure perimeter fencing (sighthound prey drive)"],
-        "photo_url": "https://images.unsplash.com/photo-1544568100-847a948585b9"
+        "photo_url": "https://images.unsplash.com/photo-1507146426996-ef05306b995a"
     },
     {
         "_id": "pet_dog_033",
@@ -668,7 +668,7 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
         "quirks": ["Perches right on door tops like a gargoyle", "Plays fetch with soft foam balls"],
         "exercise_needs": "30 minutes energetic interactive toy games",
         "triggers": ["Being confined to a single closed bedroom"],
-        "photo_url": "https://images.unsplash.com/photo-1513360309081-38a60b9d997c"
+        "photo_url": "https://images.unsplash.com/photo-1533743983669-94fa5c4338ec"
     },
     {
         "_id": "pet_cat_035",
@@ -687,7 +687,7 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
         "quirks": ["Falls asleep halfway through self-grooming sessions", "Gentle headbutts when you prepare coffee"],
         "exercise_needs": "10 minutes casual batting at catnip mice",
         "triggers": ["None - exceptionally unflappable senior cat"],
-        "photo_url": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba"
+        "photo_url": "https://images.unsplash.com/photo-1574158622682-e40e69881006"
     },
     {
         "_id": "pet_dog_036",
@@ -706,7 +706,7 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
         "quirks": ["Cocky little head-tilt when asked 'Do you want a treat?'", "Groomed beard gets wiped on rugs after drinking"],
         "exercise_needs": "40 minutes daily walks and interactive obedience tricks",
         "triggers": ["Doorbell chimes initiate alert barking"],
-        "photo_url": "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e"
+        "photo_url": "https://images.unsplash.com/photo-1583512603805-3cc6b41f3edb"
     }
 ]
 

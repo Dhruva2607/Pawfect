@@ -373,3 +373,57 @@ def test_conversational_intake_rejects_irrelevant_or_unsupported_species(monkeyp
     assert "dog" in result["response_message"].lower()
     assert "Looking for a Dog" in result["quick_replies"]
 
+
+def test_reasoning_scoring_includes_comparison_to_hero(monkeypatch):
+    from app.services import nodes
+
+    class FakeScoringLLM:
+        def invoke(self, messages):
+            raise RuntimeError("Force fallback to test grounded deterministic scoring")
+
+    class FakeLLM:
+        def with_structured_output(self, schema):
+            return FakeScoringLLM()
+
+    monkeypatch.setattr(nodes, "get_chat_llm", lambda **_: FakeLLM())
+
+    state = {
+        "extracted_constraints": {"housing_type": "apartment", "energy_budget": 3},
+        "candidate_matches": [
+            {
+                "_id": "pet-1",
+                "name": "Luna",
+                "species": "dog",
+                "breed": "Poodle",
+                "score": 0.95,
+                "housing_requirement": "apartment",
+                "temperament": ["calm", "gentle"],
+                "exercise_needs": "30 mins daily"
+            },
+            {
+                "_id": "pet-2",
+                "name": "Thor",
+                "species": "dog",
+                "breed": "Husky",
+                "score": 0.75,
+                "housing_requirement": "house_with_yard",
+                "temperament": ["energetic"],
+                "exercise_needs": "90 mins high-intensity running"
+            }
+        ]
+    }
+
+    result = nodes.reasoning_scoring_node(state)
+    evals = result["evaluations"]
+    assert len(evals) == 2
+    # Hero pet
+    assert evals[0]["pet_name"] == "Luna"
+    assert evals[0]["comparison_to_hero"] is None
+    # Alternative match
+    assert evals[1]["pet_name"] == "Thor"
+    assert evals[1]["comparison_to_hero"] is not None
+    assert "Luna" in evals[1]["comparison_to_hero"]
+    # Overall response mentions alternative matches compared to hero pet
+    assert "Thor" in result["response_message"]
+
+

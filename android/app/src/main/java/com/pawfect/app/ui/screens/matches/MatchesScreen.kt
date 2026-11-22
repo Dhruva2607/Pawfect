@@ -21,7 +21,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -157,9 +159,12 @@ fun MatchesScreen(
                                 )
                             }
                             items(uiState.otherMatches) { pet ->
+                                val eval = uiState.evaluationsByPetId[pet.id]
                                 CompactPetCard(
                                     pet = pet,
-                                    matchScore = uiState.evaluationsByPetId[pet.id]?.compatibilityScore,
+                                    matchScore = eval?.compatibilityScore,
+                                    comparisonToHero = eval?.comparisonToHero,
+                                    heroName = topPet.name,
                                     isFavorited = pet.id in uiState.savedPetIds,
                                     onToggleFavorite = { viewModel.toggleFavorite(pet.id) },
                                     onClick = { onSelectPet(pet.id) }
@@ -310,6 +315,8 @@ fun LifestyleCheckItem(text: String) {
 fun CompactPetCard(
     pet: PetDto,
     matchScore: Int? = null,
+    comparisonToHero: String? = null,
+    heroName: String? = null,
     isFavorited: Boolean,
     onToggleFavorite: () -> Unit,
     onClick: () -> Unit
@@ -344,6 +351,34 @@ fun CompactPetCard(
                         color = MatchGreen,
                         fontWeight = FontWeight.Bold
                     )
+                }
+                if (!comparisonToHero.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "vs ${heroName ?: "Hero"}: $comparisonToHero",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(6.dp))
                 PawTag(pet.temperament.firstOrNull() ?: pet.species)
