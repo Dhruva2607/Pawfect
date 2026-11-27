@@ -95,7 +95,7 @@ fun MatchesScreen(
                         Spacer(Modifier.width(10.dp))
                         Text(
                             if (savedOnly) "Saved pets"
-                            else if (uiState.evaluationsByPetId.isNotEmpty()) "Your AI matches" else "Meet the pets",
+                            else if (uiState.evaluationsByPetId.isNotEmpty()) "Your matches" else "Meet the pets",
                             style = MaterialTheme.typography.headlineSmall
                         )
                     }
@@ -126,13 +126,24 @@ fun MatchesScreen(
                         message = if (savedOnly) {
                             "Tap the heart on a pet profile to save it here."
                         } else {
-                            "Try refreshing or chat with our AI counselor to find a thoughtful match."
+                            "Try refreshing or chat with our counselor to find a thoughtful match."
                         },
                         actionLabel = if (savedOnly) "Find a companion" else "Start a conversation",
                         onAction = onStartChat,
                         modifier = Modifier.fillMaxSize().padding(paddingValues)
                     )
                 } else {
+                    val allPets = remember(topPet, uiState.otherMatches) {
+                        listOfNotNull(topPet) + uiState.otherMatches
+                    }
+                    val dogMatches = remember(allPets) {
+                        allPets.filter { it.species.equals("dog", ignoreCase = true) }
+                    }
+                    val catMatches = remember(allPets) {
+                        allPets.filter { it.species.equals("cat", ignoreCase = true) }
+                    }
+                    val hasBothSpecies = dogMatches.isNotEmpty() && catMatches.isNotEmpty()
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().padding(paddingValues),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -140,25 +151,22 @@ fun MatchesScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        item {
-                            HeroMatchCard(
-                                pet = topPet,
-                                matchScore = uiState.evaluationsByPetId[topPet.id]?.compatibilityScore,
-                                isFavorited = topPet.id in uiState.savedPetIds,
-                                onToggleFavorite = { viewModel.toggleFavorite(topPet.id) },
-                                onLearnMore = { onSelectPet(topPet.id) },
-                                onAdoptMe = { onApply(topPet.id) }
-                            )
-                        }
-                        if (uiState.otherMatches.isNotEmpty()) {
+                        if (hasBothSpecies) {
                             item {
-                                PawSectionHeader(
-                                    title = if (savedOnly) "Your saved companions"
-                                    else if (uiState.evaluationsByPetId.isNotEmpty()) "More matches for you"
-                                    else "More companions"
+                                PawSectionHeader(title = "Dog matches (${dogMatches.size})")
+                            }
+                            val topDog = dogMatches.first()
+                            item {
+                                HeroMatchCard(
+                                    pet = topDog,
+                                    matchScore = uiState.evaluationsByPetId[topDog.id]?.compatibilityScore,
+                                    isFavorited = topDog.id in uiState.savedPetIds,
+                                    onToggleFavorite = { viewModel.toggleFavorite(topDog.id) },
+                                    onLearnMore = { onSelectPet(topDog.id) },
+                                    onAdoptMe = { onApply(topDog.id) }
                                 )
                             }
-                            items(uiState.otherMatches) { pet ->
+                            items(dogMatches.drop(1), key = { it.id }) { pet ->
                                 val eval = uiState.evaluationsByPetId[pet.id]
                                 CompactPetCard(
                                     pet = pet,
@@ -169,6 +177,65 @@ fun MatchesScreen(
                                     onToggleFavorite = { viewModel.toggleFavorite(pet.id) },
                                     onClick = { onSelectPet(pet.id) }
                                 )
+                            }
+
+                            item {
+                                PawSectionHeader(title = "Cat matches (${catMatches.size})")
+                            }
+                            val topCat = catMatches.first()
+                            item {
+                                HeroMatchCard(
+                                    pet = topCat,
+                                    matchScore = uiState.evaluationsByPetId[topCat.id]?.compatibilityScore,
+                                    isFavorited = topCat.id in uiState.savedPetIds,
+                                    onToggleFavorite = { viewModel.toggleFavorite(topCat.id) },
+                                    onLearnMore = { onSelectPet(topCat.id) },
+                                    onAdoptMe = { onApply(topCat.id) }
+                                )
+                            }
+                            items(catMatches.drop(1), key = { it.id }) { pet ->
+                                val eval = uiState.evaluationsByPetId[pet.id]
+                                CompactPetCard(
+                                    pet = pet,
+                                    matchScore = eval?.compatibilityScore,
+                                    comparisonToHero = eval?.comparisonToHero,
+                                    heroName = topPet.name,
+                                    isFavorited = pet.id in uiState.savedPetIds,
+                                    onToggleFavorite = { viewModel.toggleFavorite(pet.id) },
+                                    onClick = { onSelectPet(pet.id) }
+                                )
+                            }
+                        } else {
+                            item {
+                                HeroMatchCard(
+                                    pet = topPet,
+                                    matchScore = uiState.evaluationsByPetId[topPet.id]?.compatibilityScore,
+                                    isFavorited = topPet.id in uiState.savedPetIds,
+                                    onToggleFavorite = { viewModel.toggleFavorite(topPet.id) },
+                                    onLearnMore = { onSelectPet(topPet.id) },
+                                    onAdoptMe = { onApply(topPet.id) }
+                                )
+                            }
+                            if (uiState.otherMatches.isNotEmpty()) {
+                                item {
+                                    PawSectionHeader(
+                                        title = if (savedOnly) "Your saved companions"
+                                        else if (uiState.evaluationsByPetId.isNotEmpty()) "More matches for you"
+                                        else "More companions"
+                                    )
+                                }
+                                items(uiState.otherMatches) { pet ->
+                                    val eval = uiState.evaluationsByPetId[pet.id]
+                                    CompactPetCard(
+                                        pet = pet,
+                                        matchScore = eval?.compatibilityScore,
+                                        comparisonToHero = eval?.comparisonToHero,
+                                        heroName = topPet.name,
+                                        isFavorited = pet.id in uiState.savedPetIds,
+                                        onToggleFavorite = { viewModel.toggleFavorite(pet.id) },
+                                        onClick = { onSelectPet(pet.id) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -254,7 +321,7 @@ fun HeroMatchCard(
                 }
                 Spacer(Modifier.height(14.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (matchScore != null) LifestyleCheckItem("AI compatibility: $matchScore%")
+                    if (matchScore != null) LifestyleCheckItem("Compatibility: $matchScore%")
                     LifestyleCheckItem("Suitable for ${pet.housingRequirement.replace('_', ' ')}")
                     if (pet.goodWithKids) LifestyleCheckItem("Safe and affectionate with children")
                 }

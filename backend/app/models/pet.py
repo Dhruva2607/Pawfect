@@ -15,7 +15,44 @@ class Pet(BaseModel):
     age_months: int = Field(..., description="Age in months")
     gender: str = Field(..., description="Gender: Male, Female")
     size: str = Field(..., description="Size: small, medium, large")
+    age_group: Optional[str] = Field(
+        None,
+        description="Life stage: puppy_or_kitten (<12 mo), young (12-35 mo), adult (36-83 mo), senior (84+ mo)",
+    )
+    weight_lbs: Optional[int] = Field(None, ge=1, description="Approximate weight in pounds")
     energy_level: int = Field(..., ge=1, le=5, description="Energy level rating from 1 to 5")
+    grooming_needs: Optional[str] = Field(
+        None,
+        description="Grooming frequency: low, moderate, high",
+    )
+    shedding_level: Optional[str] = Field(
+        None,
+        description="Shedding level: low, moderate, high",
+    )
+    noise_level: Optional[str] = Field(
+        None,
+        description="Vocalization / noise level: quiet, moderate, vocal",
+    )
+    alone_time_tolerance: Optional[str] = Field(
+        None,
+        description="Tolerance for being left alone: low (<=3h), moderate (4-6h), high (6-8h+)",
+    )
+    experience_level_required: Optional[str] = Field(
+        None,
+        description="Adopter experience needed: first_time_friendly, experienced_preferred",
+    )
+    training_level: Optional[str] = Field(
+        None,
+        description="Training status: basic, house_trained, well_trained",
+    )
+    coat_type: Optional[str] = Field(
+        None,
+        description="Coat type: short, medium, long, curly_hypoallergenic",
+    )
+    special_needs: Optional[bool] = Field(
+        False,
+        description="Whether the pet has special medical or dietary needs",
+    )
     good_with_kids: bool = Field(..., description="Whether pet is suitable for households with children")
     good_with_other_pets: bool = Field(..., description="Whether pet gets along with other companion animals")
     temperament: List[str] = Field(default_factory=list, description="Temperament tags, e.g. Active, Family Friendly")

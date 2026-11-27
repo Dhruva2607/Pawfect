@@ -163,7 +163,7 @@ private fun AiMatchmakerCard(onStartChat: () -> Unit) {
                     }
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Your AI matchmaker",
+                        "Your matchmaker",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary
                     )

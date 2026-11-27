@@ -81,7 +81,7 @@ sealed class BottomNavItem(
 
     object Chat : BottomNavItem(
         route = NavRoute.Chat.route,
-        title = "AI Chat",
+        title = "Chat",
         selectedIcon = Icons.Filled.ChatBubble,
         unselectedIcon = Icons.Outlined.ChatBubbleOutline
     )

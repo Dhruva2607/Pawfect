@@ -253,6 +253,29 @@ fun PetDetailScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
+                    // Care, Size & Lifestyle Details
+                    val detailTags = buildList {
+                        add("Size: ${pet.size.replaceFirstChar { it.uppercase() }}" + (pet.weightLbs?.let { " ($it lbs)" } ?: ""))
+                        pet.ageGroup?.let { add("Stage: ${it.replace("_", " ").replaceFirstChar { c -> c.uppercase() }}") }
+                        pet.groomingNeeds?.let { add("Grooming: ${it.replaceFirstChar { c -> c.uppercase() }}") }
+                        pet.sheddingLevel?.let { add("Shedding: ${it.replaceFirstChar { c -> c.uppercase() }}") }
+                        pet.noiseLevel?.let { add("Noise: ${it.replaceFirstChar { c -> c.uppercase() }}") }
+                        pet.aloneTimeTolerance?.let { add("Alone time: ${it.replaceFirstChar { c -> c.uppercase() }}") }
+                        pet.trainingLevel?.let { add("Training: ${it.replace("_", " ").replaceFirstChar { c -> c.uppercase() }}") }
+                        pet.experienceLevelRequired?.let { add("Experience: ${it.replace("_", " ").replaceFirstChar { c -> c.uppercase() }}") }
+                    }
+                    if (detailTags.isNotEmpty()) {
+                        Text("Care & Lifestyle Profile", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            detailTags.forEach { tag -> PawTag(tag) }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
                     // Quirks & Triggers
                     if (pet.quirks.isNotEmpty()) {
                         Text("Fun Quirks", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)

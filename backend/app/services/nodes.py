@@ -96,13 +96,95 @@ def _apply_species_override(constraints: Dict[str, Any], user_message: str) -> D
     return updated
 
 
+_SIGNUP_FIELD_KEYWORDS = {
+    "housing_type": ("apartment", "house", "yard", "living space", "home type", "where do you live"),
+    "has_children": ("children", "kids", "toddler", "family"),
+    "has_other_pets": ("other pets", "resident pets", "existing pets", "already have a dog", "already have a cat"),
+    "energy_budget": ("energy", "activity level", "exercise", "daily routine", "active"),
+}
+
+_CHAT_QUESTION_FLOW = [
+    (
+        "species",
+        "Are you looking to adopt a dog or a cat?",
+        ["Looking for a Dog", "Looking for a Cat", "Open to either"],
+    ),
+    (
+        "preferred_age_group",
+        "What age group are you hoping to adopt?",
+        ["Puppy or Kitten", "Young (1-3 yrs)", "Adult (3-5 yrs)", "Senior (5+ yrs)", "Any age"],
+    ),
+    (
+        "preferred_size",
+        "What size pet would suit your home best?",
+        ["Small", "Medium", "Large", "Any size"],
+    ),
+    (
+        "grooming_tolerance",
+        "How much coat grooming and brushing are you comfortable with?",
+        ["Low maintenance", "Moderate brushing", "High grooming is fine"],
+    ),
+    (
+        "noise_tolerance",
+        "What noise level works best for your household and neighbors?",
+        ["Quiet (minimal barking/meowing)", "Moderate", "Vocal pets are fine"],
+    ),
+    (
+        "daily_alone_hours",
+        "Roughly how many hours a day would your pet spend alone?",
+        ["0-3 hours", "4-6 hours", "6+ hours"],
+    ),
+    (
+        "experience_level",
+        "Have you owned a pet before?",
+        ["First-time owner", "Experienced owner"],
+    ),
+    (
+        "housing_type",
+        "What kind of living space do you have?",
+        ["Apartment", "House with yard", "House without yard"],
+    ),
+    (
+        "energy_budget",
+        "What activity level fits your daily routine best?",
+        ["Calm & low energy", "Moderate daily walks", "High energy & active"],
+    ),
+    (
+        "has_children",
+        "Do you have any children or other pets at home?",
+        ["No children or pets", "Have young children", "Have other pets", "Have children & pets"],
+    ),
+]
+
+
+def _next_missing_question(constraints: Dict[str, Any]) -> tuple[str, List[str]]:
+    """Return the next unanswered question and quick replies, skipping already-known fields."""
+    for field, question, quick_replies in _CHAT_QUESTION_FLOW:
+        if constraints.get(field) is None:
+            return question, quick_replies
+    return (
+        "Do you or anyone in your home have pet allergies or need a low-shedding pet?",
+        ["No allergies", "Yes, need low-shedding"],
+    )
+
+
+def _repeats_known_signup_field(question: str, prior_constraints: Dict[str, Any]) -> bool:
+    """Detect whether a generated follow-up question re-asks a field already known from sign-up."""
+    q_lower = (question or "").lower()
+    for field, keywords in _SIGNUP_FIELD_KEYWORDS.items():
+        if prior_constraints.get(field) is not None and any(kw in q_lower for kw in keywords):
+            return True
+    return False
+
+
 # ── Node 1: Conversational Intake Node ───────────────────────────────
 
 def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
     """
     Step 2.2: Conversational Intake Node.
     Ingests natural language dialogue, extracts lifestyle parameters, and evaluates
-    whether critical dimensions (species, living space, activity, family) have been gathered.
+    whether critical dimensions (species, age, size, grooming, noise, etc.) have been gathered
+    without repeating fields already captured during sign-up.
     """
     user_msg = state.get("user_message", "")
     history = state.get("conversation_history", [])
@@ -118,6 +200,8 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         dialogue_snippets.append(f"User: {user_msg}")
     dialogue_text = "\n".join(dialogue_snippets)
 
+    already_known_keys = [k for k, v in prior_constraints.items() if v is not None]
+
     system_prompt = (
         "You are an empathetic, expert Pet Adoption Counselor for 'PawFect'.\n"
         "Your mission is to understand an adopter's real lifestyle to ensure a long-term, stable pet adoption.\n\n"
@@ -129,30 +213,33 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         "  2. In follow_up_question, state politely and clearly that PawFect is only an adoption center for cats and dogs, and ask if they are looking to adopt a dog or a cat instead.\n"
         "  3. Set suggested_quick_replies to ['Looking for a Dog', 'Looking for a Cat'].\n"
         "  4. Do NOT set species constraint to any unsupported animal.\n\n"
+        "CRITICAL SIGN-UP & NO-REPEAT RULE:\n"
+        "- Fields already present in Prior Extracted Constraints (such as housing_type, has_children, has_other_pets, energy_budget from sign-up) are ALREADY KNOWN.\n"
+        "- NEVER ask about housing_type, has_children, has_other_pets, or energy_budget if they are already set in Prior Extracted Constraints.\n"
+        "- NEVER repeat any question for a dimension that is already present in Prior Extracted Constraints.\n\n"
         "CRITICAL ONE-QUESTION-AT-A-TIME & MATCHING SUGGESTIONS RULE:\n"
         "- When requesting more information, ask EXACTLY ONE focused question at a time. NEVER combine multiple questions into one message.\n"
-        "- Provide 2 to 4 concise suggested_quick_replies that DIRECTLY and FULLY answer that ONE question, so the adopter can simply tap an option instead of typing.\n"
-        "- Example mappings for questions and their matching suggestions:\n"
-        "  * Missing Species: follow_up_question='Are you looking to adopt a dog or a cat?' -> suggested_quick_replies=['Looking for a Dog', 'Looking for a Cat', 'Open to either']\n"
-        "  * Missing Housing: follow_up_question='What kind of living space do you have?' -> suggested_quick_replies=['Apartment', 'House with yard', 'House without yard']\n"
-        "  * Missing Activity/Energy: follow_up_question='What activity level fits your daily routine best?' -> suggested_quick_replies=['Calm & low energy', 'Moderate daily walks', 'High energy & active']\n"
-        "  * Missing Household/Pets: follow_up_question='Do you have any children or other pets at home?' -> suggested_quick_replies=['No children or other pets', 'Have young children', 'Have other pets', 'Have children & pets']\n\n"
-        "CRITICAL DIMENSIONS NEEDED BEFORE MATCHING:\n"
-        "1. Desired Species: Dog, Cat, or either?\n"
-        "2. Living Environment: Apartment, house with private yard, house without yard?\n"
-        "3. Household Composition: Any young children or elderly residents?\n"
-        "4. Resident Pets: Are there currently other dogs or cats in the home?\n"
-        "5. Activity & Energy Budget: Daily walking/exercise routine, or preferred couch snuggle vibe?\n"
-        "6. Allergies / Sensitivities: Any need for low-shedding or hypoallergenic pets?\n\n"
+        "- Provide 2 to 4 concise suggested_quick_replies that DIRECTLY and FULLY answer that ONE question.\n"
+        "- Focus on gathering the missing pet & lifestyle preferences not set during sign-up:\n"
+        "  1. species: Dog, Cat, or either ('dog', 'cat', 'any') -> ['Looking for a Dog', 'Looking for a Cat', 'Open to either']\n"
+        "  2. preferred_age_group: 'puppy_or_kitten', 'young', 'adult', 'senior', or 'any' -> ['Puppy or Kitten', 'Young (1-3 yrs)', 'Adult (3-5 yrs)', 'Senior (5+ yrs)', 'Any age']\n"
+        "  3. preferred_size: 'small', 'medium', 'large', or 'any' -> ['Small', 'Medium', 'Large', 'Any size']\n"
+        "  4. grooming_tolerance: 'low', 'moderate', 'high', or 'any' -> ['Low maintenance', 'Moderate brushing', 'High grooming is fine']\n"
+        "  5. noise_tolerance: 'quiet', 'moderate', 'vocal', or 'any' -> ['Quiet (minimal barking/meowing)', 'Moderate', 'Vocal pets are fine']\n"
+        "  6. daily_alone_hours: integer hours alone per day -> ['0-3 hours', '4-6 hours', '6+ hours']\n"
+        "  7. experience_level: 'first_time' or 'experienced' -> ['First-time owner', 'Experienced owner']\n"
+        "  8. allergies: boolean (low-shedding need) -> ['No allergies', 'Yes, need low-shedding']\n"
+        "  (Only ask housing_type, energy_budget, has_children, or has_other_pets if they are missing from Prior Extracted Constraints.)\n\n"
         "INSTRUCTIONS:\n"
         "- Merge all previously extracted constraints with any newly shared facts in the conversation.\n"
         "- The newest user message ALWAYS wins: if the user asks for a different species than before, update species to the newly requested one (only 'dog', 'cat', or 'any').\n"
-        "- Determine if we have at least 3-4 core dimensions (specifically species, housing, and energy/family).\n"
-        "- If NOT sufficient yet, ask EXACTLY ONE natural, conversational question covering the most important missing detail with matching quick replies.\n"
-        "- If SUFFICIENT and RELEVANT, set is_sufficient_for_search=True and synthesize a comprehensive semantic search_query summarizing their lifestyle."
+        "- Set is_sufficient_for_search=True once we have species PLUS at least 3 of the chat-specific dimensions (preferred_age_group, preferred_size, grooming_tolerance, noise_tolerance, daily_alone_hours, experience_level, allergies) alongside the sign-up constraints.\n"
+        "- If NOT sufficient yet, ask EXACTLY ONE natural, conversational question covering the next missing dimension with matching quick replies.\n"
+        "- If SUFFICIENT and RELEVANT, set is_sufficient_for_search=True and synthesize a comprehensive semantic search_query summarizing their sign-up profile and chat preferences."
     )
 
     human_prompt = (
+        f"Already Known Fields (DO NOT ASK ABOUT THESE): {json.dumps(already_known_keys)}\n"
         f"Prior Extracted Constraints: {json.dumps(prior_constraints)}\n\n"
         f"Conversation So Far:\n{dialogue_text}\n\n"
         "Extract the updated constraints and decide whether we are ready to retrieve pet matches."
@@ -186,16 +273,20 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
             }
 
         updated_constraints = analysis.extracted_constraints.model_dump(exclude_none=True)
-        # Merge with prior, then let an explicit species request in the newest message win
+        # Merge with prior (including sign-up baseline), then let an explicit species request in the newest message win
         merged_constraints = {**prior_constraints, **updated_constraints}
         merged_constraints = _apply_species_override(merged_constraints, user_msg)
 
         if analysis.is_sufficient_for_search:
             search_query = analysis.search_query or (
-                f"{merged_constraints.get('species', 'pet')} suitable for "
-                f"{merged_constraints.get('housing_type', 'home')} with "
+                f"{merged_constraints.get('species', 'pet')} "
+                f"{merged_constraints.get('preferred_age_group', '')} "
+                f"{merged_constraints.get('preferred_size', '')} "
+                f"grooming {merged_constraints.get('grooming_tolerance', 'any')} "
+                f"noise {merged_constraints.get('noise_tolerance', 'any')} "
+                f"suitable for {merged_constraints.get('housing_type', 'home')} with "
                 f"energy level {merged_constraints.get('energy_budget', 3)}/5"
-            )
+            ).strip()
             species = merged_constraints.get("species")
             if species and species.lower() not in search_query.lower():
                 search_query = f"{species} {search_query}"
@@ -203,34 +294,26 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
                 "extracted_constraints": merged_constraints,
                 "is_complete": True,
                 "search_queries": [search_query],
-                "response_message": "Thank you! I have a wonderful picture of your lifestyle. Searching our shelters for your ideal companion...",
+                "response_message": "Thank you! I have a wonderful picture of your lifestyle and preferences. Searching our shelters for your ideal companion...",
                 "quick_replies": [],
                 "next_node": "hybrid_retrieval"
             }
         else:
+            follow_up_q = analysis.follow_up_question
+            quick_replies = analysis.suggested_quick_replies
+            if _repeats_known_signup_field(follow_up_q, prior_constraints):
+                follow_up_q, quick_replies = _next_missing_question(merged_constraints)
             return {
                 "extracted_constraints": merged_constraints,
                 "is_complete": False,
-                "response_message": analysis.follow_up_question,
-                "quick_replies": analysis.suggested_quick_replies,
+                "response_message": follow_up_q,
+                "quick_replies": quick_replies,
                 "next_node": "await_user"
             }
 
     except Exception as e:
         logger.error("Error in conversational intake node: %s. Using graceful heuristic fallback.", e)
-        # Smart heuristic fallback: ask for the first missing dimension with matching suggestions
-        if not prior_constraints.get("species"):
-            fallback_q = "Are you looking to adopt a dog or a cat?"
-            fallback_qr = ["Looking for a Dog", "Looking for a Cat", "Open to either"]
-        elif not prior_constraints.get("housing_type"):
-            fallback_q = "What kind of home do you have?"
-            fallback_qr = ["Apartment", "House with yard", "House without yard"]
-        elif not prior_constraints.get("energy_budget"):
-            fallback_q = "What activity level fits your lifestyle best?"
-            fallback_qr = ["Calm & low energy", "Moderate daily walks", "High energy & active"]
-        else:
-            fallback_q = "Do you have any children or other pets at home?"
-            fallback_qr = ["No children or pets", "Have young children", "Have other pets", "Have children & pets"]
+        fallback_q, fallback_qr = _next_missing_question(prior_constraints)
 
         return {
             "extracted_constraints": prior_constraints,
@@ -247,6 +330,7 @@ def hybrid_retrieval_node(state: MatchmakerState) -> Dict[str, Any]:
     """
     Step 2.3: Hybrid Retrieval Node.
     Executes MQL pre-filters alongside Vector Search over candidate bios.
+    When species is 'any' (or unspecified), retrieves top matches for both dogs and cats.
     """
     constraints = state.get("extracted_constraints", {})
     queries = state.get("search_queries", [])
@@ -254,11 +338,29 @@ def hybrid_retrieval_node(state: MatchmakerState) -> Dict[str, Any]:
 
     logger.info("Executing Hybrid Retrieval Node for query: '%s'", query_text)
 
-    candidates = hybrid_search_pets(
-        query_text=query_text,
-        constraints=constraints,
-        top_k=3
-    )
+    species = (constraints.get("species") or "").lower()
+    if species in ("dog", "cat"):
+        candidates = hybrid_search_pets(
+            query_text=query_text,
+            constraints=constraints,
+            top_k=3
+        )
+    else:
+        dog_candidates = hybrid_search_pets(
+            query_text=query_text,
+            constraints={**constraints, "species": "dog"},
+            top_k=3
+        )
+        cat_candidates = hybrid_search_pets(
+            query_text=query_text,
+            constraints={**constraints, "species": "cat"},
+            top_k=3
+        )
+        candidates = sorted(
+            dog_candidates + cat_candidates,
+            key=lambda p: p.get("score", 0.0),
+            reverse=True,
+        )
 
     return {
         "candidate_matches": candidates,
@@ -275,7 +377,7 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
     Enforces strict grounding (0.1 temp) [FROM MARKDOWN: Step 6.1] and structured Pydantic output.
     """
     constraints = state.get("extracted_constraints", {})
-    candidates = state.get("candidate_matches", [])[:3]
+    candidates = state.get("candidate_matches", [])[:6]
 
     if not candidates:
         logger.warning("No candidate pets found for scoring.")
@@ -296,7 +398,18 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
             "species": pet.get("species"),
             "breed": pet.get("breed"),
             "age_months": pet.get("age_months"),
+            "age_group": pet.get("age_group"),
+            "size": pet.get("size"),
+            "weight_lbs": pet.get("weight_lbs"),
             "energy_level": pet.get("energy_level"),
+            "grooming_needs": pet.get("grooming_needs"),
+            "shedding_level": pet.get("shedding_level"),
+            "noise_level": pet.get("noise_level"),
+            "alone_time_tolerance": pet.get("alone_time_tolerance"),
+            "experience_level_required": pet.get("experience_level_required"),
+            "training_level": pet.get("training_level"),
+            "coat_type": pet.get("coat_type"),
+            "special_needs": pet.get("special_needs"),
             "housing_requirement": pet.get("housing_requirement"),
             "good_with_kids": pet.get("good_with_kids"),
             "good_with_other_pets": pet.get("good_with_other_pets"),

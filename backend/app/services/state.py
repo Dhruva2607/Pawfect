@@ -18,6 +18,26 @@ class LifestyleConstraints(BaseModel):
     has_children: Optional[bool] = Field(None, description="Whether children live in the household")
     has_other_pets: Optional[bool] = Field(None, description="Whether other resident pets live in the household")
     energy_budget: Optional[int] = Field(None, ge=1, le=5, description="Adopter energy budget / activity level (1 to 5)")
+    preferred_age_group: Optional[str] = Field(
+        None,
+        description="Preferred pet life stage: 'puppy_or_kitten', 'young', 'adult', 'senior', or 'any'",
+    )
+    preferred_size: Optional[str] = Field(
+        None,
+        description="Preferred pet size: 'small', 'medium', 'large', or 'any'",
+    )
+    grooming_tolerance: Optional[str] = Field(
+        None,
+        description="Willingness for coat grooming: 'low', 'moderate', 'high', or 'any'",
+    )
+    noise_tolerance: Optional[str] = Field(
+        None,
+        description="Tolerance for barking/meowing noise: 'quiet', 'moderate', 'vocal', or 'any'",
+    )
+    experience_level: Optional[str] = Field(
+        None,
+        description="Adopter pet ownership experience: 'first_time' or 'experienced'",
+    )
     allergies: Optional[bool] = Field(None, description="Whether adopter or family members have pet allergies (hypoallergenic requirement)")
     daily_alone_hours: Optional[int] = Field(None, description="Estimated hours pet would spend alone each day")
     notes: Optional[str] = Field(None, description="Any other lifestyle nuances mentioned by adopter")

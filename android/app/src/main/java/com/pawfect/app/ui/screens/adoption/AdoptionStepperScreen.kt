@@ -315,7 +315,7 @@ fun AdoptionStepperScreen(
                                     notes = notes
                                 )
                             },
-                            enabled = !uiState.isLoading && uiState.pet != null,
+                            enabled = !uiState.isLoading && !uiState.isSubmitted && uiState.pet != null,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),

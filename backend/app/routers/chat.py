@@ -48,6 +48,27 @@ async def _load_session_data(session_id: str) -> tuple[list, dict, Optional[str]
     return [], {}, None
 
 
+async def _load_signup_constraints(user_id: Optional[str]) -> dict:
+    """Loads baseline lifestyle constraints captured during user sign-up."""
+    if not user_id:
+        return {}
+    db = get_async_db()
+    user_doc = await db["user_profiles"].find_one({"_id": user_id})
+    if not user_doc:
+        return {}
+
+    signup_constraints: Dict[str, Any] = {}
+    if user_doc.get("housing_type") is not None:
+        signup_constraints["housing_type"] = user_doc["housing_type"]
+    if user_doc.get("has_children") is not None:
+        signup_constraints["has_children"] = user_doc["has_children"]
+    if user_doc.get("has_other_pets") is not None:
+        signup_constraints["has_other_pets"] = user_doc["has_other_pets"]
+    if user_doc.get("energy_budget") is not None:
+        signup_constraints["energy_budget"] = user_doc["energy_budget"]
+    return signup_constraints
+
+
 async def _save_session_data(
     session_id: str,
     user_id: Optional[str],
@@ -239,16 +260,20 @@ async def send_chat_message(
             detail="This chat session belongs to a different user."
         )
 
+    effective_user_id = request_data.user_id or session_user_id
+    signup_constraints = await _load_signup_constraints(effective_user_id)
+    effective_prior_constraints = {**signup_constraints, **prior_constraints}
+
     wants_stream = request_data.stream or (accept and "text/event-stream" in accept)
 
     if wants_stream:
         return EventSourceResponse(
             _generate_sse_stream(
                 session_id=request_data.session_id,
-                user_id=request_data.user_id,
+                user_id=effective_user_id,
                 user_message=request_data.message,
                 history=history,
-                prior_constraints=prior_constraints
+                prior_constraints=effective_prior_constraints
             )
         )
 
@@ -261,7 +286,7 @@ async def send_chat_message(
             request_data.session_id,
             request_data.message,
             history,
-            prior_constraints
+            effective_prior_constraints
         )
     except Exception:
         logger.exception("Chat turn failed for session %s.", request_data.session_id)
@@ -271,14 +296,14 @@ async def send_chat_message(
         )
 
     response_text = result_state.get("response_message", "")
-    updated_constraints = result_state.get("extracted_constraints", prior_constraints)
+    updated_constraints = result_state.get("extracted_constraints", effective_prior_constraints)
 
     evaluations = result_state.get("evaluations", [])
 
     try:
         await _save_session_data(
             session_id=request_data.session_id,
-            user_id=request_data.user_id,
+            user_id=effective_user_id,
             user_message=request_data.message,
             bot_message=response_text,
             constraints=updated_constraints,

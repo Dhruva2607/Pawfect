@@ -106,3 +106,14 @@ data class FavoriteToggleResponseDto(
     @SerialName("is_favorited") val isFavorited: Boolean,
     @SerialName("saved_pets_count") val savedPetsCount: Int
 )
+
+@Serializable
+data class GeneratedProfileResponseDto(
+    @SerialName("user_id") val userId: String,
+    @SerialName("adopter_name") val adopterName: String,
+    @SerialName("housing_summary") val housingSummary: String,
+    @SerialName("household_summary") val householdSummary: String,
+    @SerialName("activity_summary") val activitySummary: String,
+    @SerialName("shelter_notes") val shelterNotes: List<String> = emptyList(),
+    @SerialName("generated_at") val generatedAt: String
+)

@@ -48,12 +48,32 @@ class AdoptionViewModel @Inject constructor(
             try {
                 val pet = petRepository.getPet(petId)
                 val session = sessionManager.currentSession()
-                _uiState.update {
-                    it.copy(
-                        pet = pet,
-                        applicantName = session?.name.orEmpty(),
-                        applicantEmail = session?.email.orEmpty()
-                    )
+                val existingApp = session?.let {
+                    adoptionRepository.getUserPetApplication(it.userId, petId)
+                }
+                if (existingApp != null) {
+                    _uiState.update {
+                        it.copy(
+                            pet = pet,
+                            applicantName = session.name,
+                            applicantEmail = session.email,
+                            applicationResult = existingApp,
+                            isSubmitted = true,
+                            currentStep = AdoptionStep.APPLY,
+                            error = null
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            pet = pet,
+                            applicantName = session?.name.orEmpty(),
+                            applicantEmail = session?.email.orEmpty(),
+                            isSubmitted = false,
+                            applicationResult = null,
+                            error = null
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update {
@@ -100,6 +120,9 @@ class AdoptionViewModel @Inject constructor(
         householdMembers: String,
         notes: String
     ) {
+        if (_uiState.value.isSubmitted || _uiState.value.isLoading) {
+            return
+        }
         val session = sessionManager.currentSession()
         if (applicantName.isBlank() || applicantEmail.isBlank()) {
             _uiState.update { it.copy(error = "Name and email are required to apply.") }
@@ -134,11 +157,25 @@ class AdoptionViewModel @Inject constructor(
                     )
                 }
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = e.localizedMessage ?: "Could not submit the application. Please try again."
-                    )
+                val isConflict = e.message?.contains("409") == true || e.message?.contains("already submitted", ignoreCase = true) == true
+                if (isConflict) {
+                    val existingApp = adoptionRepository.getUserPetApplication(session.userId, petId)
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isSubmitted = true,
+                            currentStep = AdoptionStep.APPLY,
+                            applicationResult = existingApp ?: it.applicationResult,
+                            error = "You have already submitted an adoption application for this pet."
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = e.localizedMessage ?: "Could not submit the application. Please try again."
+                        )
+                    }
                 }
             }
         }

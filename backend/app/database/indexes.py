@@ -46,6 +46,34 @@ ATLAS_VECTOR_SEARCH_INDEX_DEFINITION: Dict[str, Any] = {
             {
                 "type": "filter",
                 "path": "energy_level"
+            },
+            {
+                "type": "filter",
+                "path": "size"
+            },
+            {
+                "type": "filter",
+                "path": "age_group"
+            },
+            {
+                "type": "filter",
+                "path": "grooming_needs"
+            },
+            {
+                "type": "filter",
+                "path": "shedding_level"
+            },
+            {
+                "type": "filter",
+                "path": "noise_level"
+            },
+            {
+                "type": "filter",
+                "path": "alone_time_tolerance"
+            },
+            {
+                "type": "filter",
+                "path": "experience_level_required"
             }
         ]
     }
@@ -82,7 +110,11 @@ def setup_standard_indexes(db: Database | None = None) -> Dict[str, list]:
     idx_user = adoptions_col.create_index([("user_id", ASCENDING)], name="idx_app_user_id")
     idx_pet = adoptions_col.create_index([("pet_id", ASCENDING)], name="idx_app_pet_id")
     idx_stage = adoptions_col.create_index([("stage_status", ASCENDING)], name="idx_app_stage")
-    created_indexes["adoption_applications"] = [idx_user, idx_pet, idx_stage]
+    idx_user_pet = adoptions_col.create_index(
+        [("user_id", ASCENDING), ("pet_id", ASCENDING)],
+        name="idx_app_user_pet"
+    )
+    created_indexes["adoption_applications"] = [idx_user, idx_pet, idx_stage, idx_user_pet]
 
     # User profiles indexes
     profiles_col = db["user_profiles"]

@@ -111,7 +111,7 @@ fun WelcomeScreen(
                     .padding(24.dp)
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PawTag("AI-guided")
+                    PawTag("Personalized")
                     PawTag("Shelter-first")
                     PawTag("Grounded")
                 }

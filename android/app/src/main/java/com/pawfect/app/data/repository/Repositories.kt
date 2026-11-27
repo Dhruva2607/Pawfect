@@ -22,6 +22,25 @@ class AuthRepository @Inject constructor(
     suspend fun signup(request: AuthRequestDto): AuthResponseDto =
         apiService.signup(request).also(sessionManager::saveSession)
 
+    suspend fun updateProfileAnswer(userId: String, request: UserProfileUpdateDto): UserProfileDto {
+        val updated = apiService.updateUserProfile(userId, request)
+        val current = sessionManager.currentSession()
+        if (current != null) {
+            sessionManager.updateSession(
+                name = updated.name,
+                email = updated.email,
+                housingType = updated.housingType ?: current.housingType,
+                hasChildren = updated.hasChildren ?: current.hasChildren,
+                hasOtherPets = updated.hasOtherPets ?: current.hasOtherPets,
+                energyBudget = updated.energyBudget ?: current.energyBudget
+            )
+        }
+        return updated
+    }
+
+    suspend fun generateAndSaveProfile(userId: String): GeneratedProfileResponseDto =
+        apiService.generateUserProfile(userId)
+
     fun logout() = sessionManager.logout()
 }
 
@@ -97,5 +116,13 @@ class AdoptionRepository @Inject constructor(
 
     suspend fun getAdoptionStatus(applicationId: String): AdoptionStatusResponseDto {
         return apiService.getAdoptionStatus(applicationId)
+    }
+
+    suspend fun getUserPetApplication(userId: String, petId: String): AdoptionStatusResponseDto? {
+        return try {
+            apiService.getUserPetApplication(userId, petId)
+        } catch (e: Exception) {
+            null
+        }
     }
 }

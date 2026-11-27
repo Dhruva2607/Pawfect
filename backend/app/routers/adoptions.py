@@ -64,6 +64,17 @@ async def apply_adoption(request: AdoptionApplyRequest):
 
     pet = Pet(**pet_doc)
 
+    # Enforce single submission: check if an application already exists for this user and pet
+    existing_app = await db["adoption_applications"].find_one({
+        "user_id": request.user_id,
+        "pet_id": request.pet_id
+    })
+    if existing_app:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"You have already submitted an adoption application for {pet.name}."
+        )
+
     # Generate custom application id
     timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     app_id = f"app_{request.user_id}_{pet.id}_{timestamp_str}"
@@ -125,4 +136,36 @@ async def get_adoption_status(id: str):
         submitted_at=app_doc["submitted_at"],
         updated_at=app_doc["updated_at"]
     )
+
+
+@router.get("/user/{user_id}/pet/{pet_id}", response_model=Optional[AdoptionStatusResponse], summary="Check User Application for Pet")
+async def get_user_pet_application(user_id: str, pet_id: str):
+    """
+    Returns the user's existing adoption application for a specific pet, if any.
+    Used by frontend to check if user has already submitted an application.
+    """
+    db = get_async_db()
+    app_doc = await db["adoption_applications"].find_one({
+        "user_id": user_id,
+        "pet_id": pet_id
+    })
+    if not app_doc:
+        return None
+
+    pet_name = None
+    pet_doc = await db["pets"].find_one({"_id": app_doc.get("pet_id")})
+    if pet_doc:
+        pet_name = pet_doc.get("name")
+
+    return AdoptionStatusResponse(
+        application_id=app_doc["_id"],
+        user_id=app_doc["user_id"],
+        pet_id=app_doc["pet_id"],
+        pet_name=pet_name,
+        stage_status=app_doc["stage_status"],
+        applicant_name=app_doc["applicant_name"],
+        submitted_at=app_doc["submitted_at"],
+        updated_at=app_doc["updated_at"]
+    )
+
 

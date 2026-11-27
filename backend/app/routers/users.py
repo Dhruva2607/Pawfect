@@ -4,7 +4,7 @@ User Profile and Saved Pets (Favorites) endpoints.
 """
 
 import hashlib
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
@@ -60,6 +60,16 @@ class UserProfileUpdateRequest(BaseModel):
     has_children: Optional[bool] = None
     has_other_pets: Optional[bool] = None
     energy_budget: Optional[int] = Field(None, ge=1, le=5)
+
+
+class ShelterProfileResponse(BaseModel):
+    user_id: str
+    adopter_name: str
+    housing_summary: str
+    household_summary: str
+    activity_summary: str
+    shelter_notes: List[str] = Field(default_factory=list)
+    generated_at: str
 
 
 async def _get_or_create_user(user_id: str) -> dict:
@@ -156,7 +166,7 @@ async def update_user_profile(id: str, updates: UserProfileUpdateRequest):
     db = get_async_db()
     await _get_or_create_user(id)
 
-    update_dict = updates.model_dump(exclude_unset=True)
+    update_dict = updates.model_dump(exclude_none=True)
     update_dict["updated_at"] = datetime.now(timezone.utc)
 
     await db["user_profiles"].update_one(
@@ -166,6 +176,69 @@ async def update_user_profile(id: str, updates: UserProfileUpdateRequest):
 
     updated_doc = await db["user_profiles"].find_one({"_id": id})
     return UserProfile(**updated_doc)
+
+
+@router.post("/{id}/shelter-profile", response_model=ShelterProfileResponse, summary="Generate and Save Profile")
+async def generate_shelter_profile(id: str):
+    """
+    Generates a structured adopter profile from the user's stored sign-up answers
+    and saves it to their UserProfile document.
+    """
+    db = get_async_db()
+    user_doc = await _get_or_create_user(id)
+
+    housing = user_doc.get("housing_type") or "apartment"
+    has_children = bool(user_doc.get("has_children", False))
+    has_other_pets = bool(user_doc.get("has_other_pets", False))
+    energy = int(user_doc.get("energy_budget") or 3)
+    adopter_name = user_doc.get("name") or "PawFect Adopter"
+
+    housing_label = "House with yard" if "yard" in housing else "Apartment"
+    if has_children and has_other_pets:
+        household_summary = "Family home with children and resident pets"
+    elif has_children:
+        household_summary = "Family home with children"
+    elif has_other_pets:
+        household_summary = "Multi-pet household"
+    else:
+        household_summary = "Quiet adult household (no children or other pets)"
+
+    activity_labels = {
+        1: "1/5 · Relaxed & low-energy routine",
+        2: "2/5 · Gentle daily walks",
+        3: "3/5 · Moderate daily activity",
+        4: "4/5 · Active outdoor lifestyle",
+        5: "5/5 · High-energy & athletic routine",
+    }
+    activity_summary = activity_labels.get(energy, f"{energy}/5 · Moderate daily activity")
+
+    shelter_notes: List[str] = [
+        f"Approved living space: {housing_label}",
+        f"Household fit: {household_summary}",
+        f"Daily activity capacity: {activity_summary}",
+    ]
+    if has_children:
+        shelter_notes.append("Prioritize kid-friendly companions")
+    if has_other_pets:
+        shelter_notes.append("Prioritize pets comfortable with other animals")
+
+    now = datetime.now(timezone.utc)
+    shelter_profile: Dict[str, Any] = {
+        "user_id": id,
+        "adopter_name": adopter_name,
+        "housing_summary": housing_label,
+        "household_summary": household_summary,
+        "activity_summary": activity_summary,
+        "shelter_notes": shelter_notes,
+        "generated_at": now.isoformat(),
+    }
+
+    await db["user_profiles"].update_one(
+        {"_id": id},
+        {"$set": {"shelter_profile": shelter_profile, "updated_at": now}}
+    )
+
+    return ShelterProfileResponse(**shelter_profile)
 
 
 @router.get(

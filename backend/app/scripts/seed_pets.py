@@ -711,10 +711,53 @@ RAW_PET_RECORDS: List[Dict[str, Any]] = [
 ]
 
 
+PET_EXTRA_ATTRIBUTES: Dict[str, Dict[str, Any]] = {
+    "pet_dog_001": {"age_group": "young", "weight_lbs": 62, "grooming_needs": "moderate", "shedding_level": "high", "noise_level": "moderate", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "medium", "special_needs": False},
+    "pet_dog_002": {"age_group": "young", "weight_lbs": 52, "grooming_needs": "high", "shedding_level": "high", "noise_level": "vocal", "alone_time_tolerance": "low", "experience_level_required": "experienced_preferred", "training_level": "basic", "coat_type": "long", "special_needs": False},
+    "pet_dog_003": {"age_group": "adult", "weight_lbs": 24, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_004": {"age_group": "young", "weight_lbs": 40, "grooming_needs": "moderate", "shedding_level": "moderate", "noise_level": "moderate", "alone_time_tolerance": "low", "experience_level_required": "experienced_preferred", "training_level": "well_trained", "coat_type": "medium", "special_needs": False},
+    "pet_dog_005": {"age_group": "adult", "weight_lbs": 65, "grooming_needs": "low", "shedding_level": "low", "noise_level": "moderate", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_006": {"age_group": "young", "weight_lbs": 16, "grooming_needs": "moderate", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "low", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "medium", "special_needs": False},
+    "pet_dog_007": {"age_group": "adult", "weight_lbs": 78, "grooming_needs": "moderate", "shedding_level": "high", "noise_level": "moderate", "alone_time_tolerance": "moderate", "experience_level_required": "experienced_preferred", "training_level": "well_trained", "coat_type": "medium", "special_needs": False},
+    "pet_dog_008": {"age_months": 8, "age_group": "puppy_or_kitten", "weight_lbs": 16, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "vocal", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "basic", "coat_type": "short", "special_needs": False},
+    "pet_dog_009": {"age_group": "adult", "weight_lbs": 55, "grooming_needs": "high", "shedding_level": "low", "noise_level": "quiet", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "curly_hypoallergenic", "special_needs": False},
+    "pet_dog_010": {"age_group": "young", "weight_lbs": 11, "grooming_needs": "low", "shedding_level": "low", "noise_level": "moderate", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_011": {"age_group": "young", "weight_lbs": 42, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "moderate", "alone_time_tolerance": "low", "experience_level_required": "experienced_preferred", "training_level": "well_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_012": {"age_group": "adult", "weight_lbs": 28, "grooming_needs": "high", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "long", "special_needs": False},
+    "pet_dog_013": {"age_group": "young", "weight_lbs": 98, "grooming_needs": "high", "shedding_level": "high", "noise_level": "quiet", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "long", "special_needs": False},
+    "pet_dog_014": {"age_months": 9, "age_group": "puppy_or_kitten", "weight_lbs": 12, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "vocal", "alone_time_tolerance": "low", "experience_level_required": "experienced_preferred", "training_level": "basic", "coat_type": "short", "special_needs": False},
+    "pet_dog_015": {"age_group": "adult", "weight_lbs": 115, "grooming_needs": "low", "shedding_level": "low", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_016": {"age_group": "senior", "weight_lbs": 8, "grooming_needs": "low", "shedding_level": "low", "noise_level": "quiet", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_017": {"age_group": "young", "weight_lbs": 64, "grooming_needs": "low", "shedding_level": "high", "noise_level": "moderate", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_018": {"age_group": "adult", "weight_lbs": 50, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "moderate", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_019": {"age_group": "young", "weight_lbs": 11, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "moderate", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_020": {"age_group": "adult", "weight_lbs": 9, "grooming_needs": "low", "shedding_level": "low", "noise_level": "vocal", "alone_time_tolerance": "low", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_021": {"age_group": "adult", "weight_lbs": 10, "grooming_needs": "low", "shedding_level": "low", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_022": {"age_months": 7, "age_group": "puppy_or_kitten", "weight_lbs": 8, "grooming_needs": "moderate", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "long", "special_needs": False},
+    "pet_cat_023": {"age_group": "young", "weight_lbs": 18, "grooming_needs": "high", "shedding_level": "high", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "long", "special_needs": False},
+    "pet_cat_024": {"age_group": "senior", "weight_lbs": 10, "grooming_needs": "low", "shedding_level": "low", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_025": {"age_months": 8, "age_group": "puppy_or_kitten", "weight_lbs": 9, "grooming_needs": "low", "shedding_level": "low", "noise_level": "vocal", "alone_time_tolerance": "low", "experience_level_required": "experienced_preferred", "training_level": "basic", "coat_type": "short", "special_needs": False},
+    "pet_cat_026": {"age_group": "young", "weight_lbs": 8, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_027": {"age_group": "adult", "weight_lbs": 15, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_028": {"age_group": "adult", "weight_lbs": 10, "grooming_needs": "high", "shedding_level": "high", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "long", "special_needs": False},
+    "pet_dog_029": {"age_months": 10, "age_group": "puppy_or_kitten", "weight_lbs": 20, "grooming_needs": "moderate", "shedding_level": "high", "noise_level": "vocal", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "medium", "special_needs": False},
+    "pet_dog_030": {"age_group": "young", "weight_lbs": 48, "grooming_needs": "moderate", "shedding_level": "high", "noise_level": "moderate", "alone_time_tolerance": "low", "experience_level_required": "experienced_preferred", "training_level": "well_trained", "coat_type": "medium", "special_needs": False},
+    "pet_dog_031": {"age_group": "young", "weight_lbs": 17, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_032": {"age_group": "young", "weight_lbs": 30, "grooming_needs": "low", "shedding_level": "low", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_033": {"age_group": "adult", "weight_lbs": 95, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "moderate", "experience_level_required": "experienced_preferred", "training_level": "well_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_034": {"age_months": 9, "age_group": "puppy_or_kitten", "weight_lbs": 6, "grooming_needs": "low", "shedding_level": "low", "noise_level": "moderate", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "house_trained", "coat_type": "short", "special_needs": False},
+    "pet_cat_035": {"age_group": "senior", "weight_lbs": 14, "grooming_needs": "low", "shedding_level": "moderate", "noise_level": "quiet", "alone_time_tolerance": "high", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "short", "special_needs": False},
+    "pet_dog_036": {"age_group": "young", "weight_lbs": 16, "grooming_needs": "high", "shedding_level": "low", "noise_level": "vocal", "alone_time_tolerance": "moderate", "experience_level_required": "first_time_friendly", "training_level": "well_trained", "coat_type": "curly_hypoallergenic", "special_needs": False},
+}
+
+for _pet in RAW_PET_RECORDS:
+    _pet.update(PET_EXTRA_ATTRIBUTES.get(_pet["_id"], {}))
+
+
 def create_pet_embedding_text(pet: Dict[str, Any]) -> str:
     """
     Constructs a rich narrative document representation for semantic vector search.
-    Enriches with species, breed, energy, temperament, quirks, exercise needs, and bio.
+    Enriches with species, breed, age, size, grooming, noise, alone time, temperament, quirks, exercise needs, and bio.
     """
     temperament_str = ", ".join(pet.get("temperament", []))
     quirks_str = "; ".join(pet.get("quirks", []))
@@ -723,8 +766,13 @@ def create_pet_embedding_text(pet: Dict[str, Any]) -> str:
     return (
         f"Species: {pet.get('species')}. "
         f"Breed: {pet.get('breed')}. "
-        f"Age: {pet.get('age_months')} months. Gender: {pet.get('gender')}. "
-        f"Size: {pet.get('size')}. Energy Level: {pet.get('energy_level')}/5. "
+        f"Age: {pet.get('age_months')} months ({pet.get('age_group', 'adult')}). Gender: {pet.get('gender')}. "
+        f"Size: {pet.get('size')} ({pet.get('weight_lbs', 'N/A')} lbs). Energy Level: {pet.get('energy_level')}/5. "
+        f"Grooming needs: {pet.get('grooming_needs', 'moderate')}. Shedding: {pet.get('shedding_level', 'moderate')}. "
+        f"Coat: {pet.get('coat_type', 'short')}. Noise level: {pet.get('noise_level', 'moderate')}. "
+        f"Alone time tolerance: {pet.get('alone_time_tolerance', 'moderate')}. "
+        f"Experience level: {pet.get('experience_level_required', 'first_time_friendly')}. "
+        f"Training: {pet.get('training_level', 'basic')}. "
         f"Housing: {pet.get('housing_requirement')}. "
         f"Good with kids: {pet.get('good_with_kids')}. Good with other pets: {pet.get('good_with_other_pets')}. "
         f"Temperament: {temperament_str}. "

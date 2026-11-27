@@ -72,9 +72,51 @@ def build_mql_prefilter(constraints: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(energy_budget, int):
         query["energy_level"] = {"$lte": min(5, energy_budget + 1)}
 
+    # Size preference filter
+    preferred_size = constraints.get("preferred_size")
+    if preferred_size and preferred_size.lower() in ["small", "medium", "large"]:
+        query["size"] = preferred_size.lower()
+
+    # Age group preference filter
+    preferred_age = constraints.get("preferred_age_group")
+    if preferred_age and preferred_age.lower() in ["puppy_or_kitten", "young", "adult", "senior"]:
+        query["age_group"] = preferred_age.lower()
+
+    # Grooming tolerance filter
+    grooming = constraints.get("grooming_tolerance")
+    if grooming:
+        grooming_clean = grooming.lower()
+        if grooming_clean == "low":
+            query["grooming_needs"] = "low"
+        elif grooming_clean == "moderate":
+            query["grooming_needs"] = {"$in": ["low", "moderate"]}
+
+    # Noise tolerance filter
+    noise = constraints.get("noise_tolerance")
+    if noise:
+        noise_clean = noise.lower()
+        if noise_clean == "quiet":
+            query["noise_level"] = "quiet"
+        elif noise_clean == "moderate":
+            query["noise_level"] = {"$in": ["quiet", "moderate"]}
+
+    # Daily alone hours filter
+    alone_hours = constraints.get("daily_alone_hours")
+    if isinstance(alone_hours, int):
+        if alone_hours >= 7:
+            query["alone_time_tolerance"] = "high"
+        elif alone_hours >= 4:
+            query["alone_time_tolerance"] = {"$in": ["moderate", "high"]}
+
+    # First-time owner experience filter
+    experience = constraints.get("experience_level")
+    if experience and experience.lower() == "first_time":
+        query["experience_level_required"] = "first_time_friendly"
+
     # Hypoallergenic filter if allergies are flagged
     if constraints.get("allergies") is True:
         query["$or"] = [
+            {"shedding_level": "low"},
             {"temperament": {"$regex": "hypoallergenic", "$options": "i"}},
             {"temperament": {"$regex": "low shedding", "$options": "i"}},
             {"bio_text": {"$regex": "hypoallergenic", "$options": "i"}},
@@ -84,31 +126,23 @@ def build_mql_prefilter(constraints: Dict[str, Any]) -> Dict[str, Any]:
     return query
 
 
-def hybrid_search_pets(
-    query_text: str,
-    constraints: Dict[str, Any],
-    top_k: int = 5,
-    db: Optional[Database] = None
+_SOFT_PREFERENCE_KEYS = (
+    "preferred_size",
+    "preferred_age_group",
+    "grooming_tolerance",
+    "noise_tolerance",
+    "daily_alone_hours",
+    "experience_level",
+)
+
+
+def _run_vector_or_cosine_search(
+    pets_col: Any,
+    query_vector: List[float],
+    mql_filter: Dict[str, Any],
+    top_k: int,
 ) -> List[Dict[str, Any]]:
-    """
-    Executes hybrid retrieval:
-    1. Generates 768-dim embedding for semantic query.
-    2. Applies MQL operational pre-filters.
-    3. Scores matching pets by cosine similarity over embedding field.
-    4. Returns top_k ranked candidate matches with similarity score.
-    """
-    if db is None:
-        db = get_sync_db()
-
-    pets_col = db["pets"]
-
-    # 1. Generate query embedding vector
-    query_vector = generate_embedding(query_text)
-
-    # 2. Build MQL pre-filter
-    mql_filter = build_mql_prefilter(constraints)
-    logger.info("Executing hybrid search with MQL filter: %s", mql_filter)
-
+    """Executes Atlas $vectorSearch with MQL filter, falling back to in-memory cosine ranking."""
     # Atlas Vector Search does not support the regex predicates used for allergy filtering.
     # Keep those searches on the regular MongoDB query path instead.
     if "$or" not in mql_filter:
@@ -131,9 +165,19 @@ def hybrid_search_pets(
                         "species": 1,
                         "breed": 1,
                         "age_months": 1,
+                        "age_group": 1,
                         "gender": 1,
                         "size": 1,
+                        "weight_lbs": 1,
                         "energy_level": 1,
+                        "grooming_needs": 1,
+                        "shedding_level": 1,
+                        "noise_level": 1,
+                        "alone_time_tolerance": 1,
+                        "experience_level_required": 1,
+                        "training_level": 1,
+                        "coat_type": 1,
+                        "special_needs": 1,
                         "good_with_kids": 1,
                         "good_with_other_pets": 1,
                         "temperament": 1,
@@ -157,11 +201,10 @@ def hybrid_search_pets(
                 e,
             )
 
-    # 4. Fallback: MQL pre-filter + in-memory cosine ranking
+    # Fallback: MQL pre-filter + in-memory cosine ranking
     candidates_cursor = pets_col.find(mql_filter)
     candidates = list(candidates_cursor)
 
-    # Rank by cosine similarity
     ranked: List[Dict[str, Any]] = []
     for pet in candidates:
         emb = pet.get("embedding")
@@ -171,7 +214,7 @@ def hybrid_search_pets(
             score = 0.0
 
         pet_clean = dict(pet)
-        pet_clean.pop("embedding", None)  # Remove raw embedding array from candidate representation
+        pet_clean.pop("embedding", None)
         pet_clean["score"] = round(score, 4)
         ranked.append(pet_clean)
 
@@ -179,3 +222,63 @@ def hybrid_search_pets(
     top_candidates = ranked[:top_k]
     logger.info("Retrieved %d candidates via hybrid MQL + cosine ranking.", len(top_candidates))
     return top_candidates
+
+
+def hybrid_search_pets(
+    query_text: str,
+    constraints: Dict[str, Any],
+    top_k: int = 5,
+    db: Optional[Database] = None
+) -> List[Dict[str, Any]]:
+    """
+    Executes hybrid retrieval:
+    1. Generates 768-dim embedding for semantic query.
+    2. Applies MQL operational pre-filters.
+    3. Scores matching pets by cosine similarity over embedding field.
+    4. If fewer than top_k exact matches exist, fills remaining slots with near-match
+       alternatives by relaxing soft preference filters (never dropping safety/species).
+    """
+    if db is None:
+        db = get_sync_db()
+
+    pets_col = db["pets"]
+    query_vector = generate_embedding(query_text)
+
+    # 1. Strict search with all constraints
+    mql_filter = build_mql_prefilter(constraints)
+    logger.info("Executing hybrid search with MQL filter: %s", mql_filter)
+    results = _run_vector_or_cosine_search(pets_col, query_vector, mql_filter, top_k)
+
+    # 2. If fewer than top_k matches and soft preferences were applied, relax soft preferences for alternatives
+    if len(results) < top_k and any(constraints.get(k) is not None for k in _SOFT_PREFERENCE_KEYS):
+        relaxed_constraints = {k: v for k, v in constraints.items() if k not in _SOFT_PREFERENCE_KEYS}
+        relaxed_filter = build_mql_prefilter(relaxed_constraints)
+        logger.info("Filling alternative matches with relaxed soft preferences: %s", relaxed_filter)
+        extra = _run_vector_or_cosine_search(pets_col, query_vector, relaxed_filter, top_k * 2)
+        seen_ids = {p.get("_id") for p in results}
+        for pet in extra:
+            if pet.get("_id") not in seen_ids:
+                results.append(pet)
+                seen_ids.add(pet.get("_id"))
+                if len(results) >= top_k:
+                    break
+
+    # 3. If still fewer than top_k (e.g. strict energy/housing combo), relax energy/housing while keeping species/safety
+    if len(results) < top_k and (constraints.get("energy_budget") is not None or constraints.get("housing_type") is not None):
+        core_constraints = {
+            k: v for k, v in constraints.items()
+            if k in ("species", "has_children", "has_other_pets", "allergies")
+        }
+        core_filter = build_mql_prefilter(core_constraints)
+        if core_filter != mql_filter:
+            logger.info("Filling remaining alternative matches with core safety/species filter: %s", core_filter)
+            extra = _run_vector_or_cosine_search(pets_col, query_vector, core_filter, top_k * 2)
+            seen_ids = {p.get("_id") for p in results}
+            for pet in extra:
+                if pet.get("_id") not in seen_ids:
+                    results.append(pet)
+                    seen_ids.add(pet.get("_id"))
+                    if len(results) >= top_k:
+                        break
+
+    return results[:top_k]

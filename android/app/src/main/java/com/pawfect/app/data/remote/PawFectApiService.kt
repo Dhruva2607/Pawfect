@@ -35,11 +35,22 @@ interface PawFectApiService {
         @Body request: UserProfileUpdateDto
     ): UserProfileDto
 
+    @POST("users/{id}/shelter-profile")
+    suspend fun generateUserProfile(
+        @Path("id") id: String
+    ): GeneratedProfileResponseDto
+
     @POST("adoptions/apply")
     suspend fun applyAdoption(@Body request: AdoptionApplyRequestDto): AdoptionStatusResponseDto
 
     @GET("adoptions/{id}/status")
     suspend fun getAdoptionStatus(@Path("id") id: String): AdoptionStatusResponseDto
+
+    @GET("adoptions/user/{userId}/pet/{petId}")
+    suspend fun getUserPetApplication(
+        @Path("userId") userId: String,
+        @Path("petId") petId: String
+    ): AdoptionStatusResponseDto?
 
     @GET("users/{id}/saved-pets")
     suspend fun getSavedPets(@Path("id") id: String): List<PetDto>

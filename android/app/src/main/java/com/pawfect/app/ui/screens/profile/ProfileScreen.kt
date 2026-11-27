@@ -125,7 +125,7 @@ fun ProfileScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column {
-                    ProfileMenuItem(Icons.Default.FavoriteBorder, "My matches", "Your AI recommendations", onNavigateToMatches)
+                    ProfileMenuItem(Icons.Default.FavoriteBorder, "My matches", "Your recommendations", onNavigateToMatches)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     ProfileMenuItem(Icons.Default.BookmarkBorder, "Saved pets", "${uiState.savedPets.size} companions saved", onNavigateToSavedPets)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
@@ -143,7 +143,7 @@ fun ProfileScreen(
                 Column {
                     ProfileMenuItem(Icons.Default.Settings, "Lifestyle preferences", "Help us make thoughtful matches", { showSettings = true })
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
-                    ProfileMenuItem(Icons.Default.Info, "About PawFect", "AI-powered adoption, centered on you", { showAbout = true })
+                    ProfileMenuItem(Icons.Default.Info, "About PawFect", "Thoughtful adoption, centered on you", { showAbout = true })
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -177,7 +177,7 @@ fun ProfileScreen(
             onDismissRequest = { showAbout = false },
             icon = { Icon(Icons.Default.Pets, contentDescription = null) },
             title = { Text("PawFect") },
-            text = { Text("A thoughtful AI pet matchmaker that helps adopters discover companions suited to their home, routine, and family.") },
+            text = { Text("A thoughtful pet matchmaker that helps adopters discover companions suited to their home, routine, and family.") },
             confirmButton = { TextButton(onClick = { showAbout = false }) { Text("Done") } }
         )
     }
