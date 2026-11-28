@@ -14,7 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationBroker:
-    """In-memory pub/sub broker keyed by (recipient_role, recipient_id) for SSE streams."""
+    """
+    In-memory pub/sub broker keyed by (recipient_role, recipient_id) for SSE streams.
+
+    IMPORTANT: subscribers live inside this process only. With more than one
+    uvicorn worker, a publish handled by worker A never reaches a stream held by
+    worker B. Run a single worker (the documented setup), or replace this with a
+    shared bus (Redis pub/sub or Mongo change streams) before scaling out.
+    """
 
     def __init__(self) -> None:
         self._subscribers: Dict[Tuple[str, str], List[asyncio.Queue]] = {}

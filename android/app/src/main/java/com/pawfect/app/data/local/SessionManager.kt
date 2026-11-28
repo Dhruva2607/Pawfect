@@ -41,7 +41,10 @@ class SessionManager @Inject constructor(
     }
 
     fun saveSession(response: AuthResponseDto) {
+        val previousUserId = preferences.getString(KEY_USER_ID, null)
+        val isDifferentUser = previousUserId != null && previousUserId != response.userId
         val chatSession = preferences.getString(KEY_CHAT_SESSION, null)
+
         preferences.edit {
             putString(KEY_USER_ID, response.userId)
             putString(KEY_NAME, response.name)
@@ -51,7 +54,16 @@ class SessionManager @Inject constructor(
             putBoolean(KEY_HAS_CHILDREN, response.hasChildren ?: false)
             putBoolean(KEY_HAS_OTHER_PETS, response.hasOtherPets ?: false)
             putInt(KEY_ENERGY_BUDGET, response.energyBudget ?: 3)
-            if (chatSession.isNullOrBlank()) {
+
+            if (isDifferentUser) {
+                // Signing in as someone else must not inherit the previous
+                // person's conversation, quick replies, or recommendations.
+                putString(KEY_CHAT_SESSION, UUID.randomUUID().toString())
+                remove(KEY_CONVERSATION)
+                remove(KEY_MATCH_RESULTS)
+                remove(KEY_QUICK_REPLIES)
+                remove(KEY_CHAT_COMPLETE)
+            } else if (chatSession.isNullOrBlank()) {
                 putString(KEY_CHAT_SESSION, UUID.randomUUID().toString())
             }
         }

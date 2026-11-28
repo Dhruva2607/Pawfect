@@ -118,6 +118,11 @@ class AdoptionRepository @Inject constructor(
         return apiService.getAdoptionStatus(applicationId)
     }
 
+    /** All applications submitted by the signed-in adopter, newest first. */
+    suspend fun getMyApplications(skip: Int = 0, limit: Int = 50): List<AdoptionStatusResponseDto> {
+        return apiService.getMyApplications(skip = skip, limit = limit)
+    }
+
     suspend fun getUserPetApplication(userId: String, petId: String): AdoptionStatusResponseDto? {
         return try {
             apiService.getUserPetApplication(userId, petId)

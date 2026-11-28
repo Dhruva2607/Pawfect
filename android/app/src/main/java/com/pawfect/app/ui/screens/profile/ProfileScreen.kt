@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -72,6 +73,7 @@ fun ProfileScreen(
     onNavigateToMatches: () -> Unit,
     onNavigateToSavedPets: () -> Unit,
     onNavigateToChatHistory: () -> Unit,
+    onNavigateToApplications: () -> Unit,
     onLogout: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
@@ -130,6 +132,8 @@ fun ProfileScreen(
                     ProfileMenuItem(Icons.Default.BookmarkBorder, "Saved pets", "${uiState.savedPets.size} companions saved", onNavigateToSavedPets)
                     HorizontalDivider(Modifier.padding(horizontal = 16.dp))
                     ProfileMenuItem(Icons.Default.ChatBubbleOutline, "Chat history", "Continue your matchmaker conversation", onNavigateToChatHistory)
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                    ProfileMenuItem(Icons.Default.Description, "My applications", "Track your adoption requests", onNavigateToApplications)
                 }
             }
 

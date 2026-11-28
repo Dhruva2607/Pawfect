@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.pawfect.app.ui.screens.adoption.AdoptionStepperScreen
+import com.pawfect.app.ui.screens.adoption.AdoptionTrackerScreen
 import com.pawfect.app.ui.screens.auth.AuthScreen
 import com.pawfect.app.ui.screens.chat.ChatScreen
 import com.pawfect.app.ui.screens.compatibility.CompatibilityScreen
@@ -210,12 +211,21 @@ fun PawFectNavGraph(
             )
         }
 
+        // Adopter application tracker
+        composable(NavRoute.AdoptionTracker.route) {
+            AdoptionTrackerScreen(
+                onBack = { navController.popBackStack() },
+                onBrowsePets = { navController.navigate(NavRoute.Matches.route) }
+            )
+        }
+
         // Screen 8: User Profile Hub
         composable(NavRoute.Profile.route) {
             ProfileScreen(
                 onNavigateToMatches = { navController.navigate(NavRoute.Matches.route) },
                 onNavigateToSavedPets = { navController.navigate(NavRoute.SavedPets.route) },
                 onNavigateToChatHistory = { navController.navigate(NavRoute.Chat.route) },
+                onNavigateToApplications = { navController.navigate(NavRoute.AdoptionTracker.route) },
                 onLogout = onLogout
             )
         }

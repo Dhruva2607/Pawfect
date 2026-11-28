@@ -8,16 +8,39 @@ import asyncio
 import logging
 from typing import List, Dict, Any, Optional, AsyncGenerator
 from datetime import datetime, timezone
+from bson import ObjectId
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from app.database.connection import get_async_db
 from app.services.graph import run_matchmaker_turn
+from app.services.rate_limit import adopter_key, chat_limiter, rate_limit
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+
+def _json_safe_default(value: Any) -> Any:
+    """
+    Fallback encoder for values that json.dumps cannot handle.
+
+    Pet documents carry native Mongo datetimes (listed_at, updated_at). Serializing
+    a `matches` event without this raised
+    `TypeError: Object of type datetime is not JSON serializable`, which killed the
+    stream mid-response and surfaced in the app as a connection failure.
+    """
+    if isinstance(value, (datetime,)):
+        return value.isoformat()
+    if isinstance(value, ObjectId):
+        return str(value)
+    return str(value)
+
+
+def _sse(event: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Build one SSE frame, tolerating Mongo types such as datetime and ObjectId."""
+    return {"event": event, "data": json.dumps(payload, default=_json_safe_default)}
 
 
 class ChatMessageRequest(BaseModel):
@@ -140,34 +163,40 @@ async def _generate_sse_stream(
     [FROM MARKDOWN: Step 3.1 & Section 4]
     """
     # 1. Emit typing indicator
-    yield {
-        "event": "typing",
-        "data": json.dumps({"event": "typing", "status": "thinking", "session_id": session_id})
-    }
-    await asyncio.sleep(0.05)
+    yield _sse("typing", {"event": "typing", "status": "thinking", "session_id": session_id})
 
-    # 2. Execute state machine turn in worker thread
+    # 2. Execute the state machine turn in a worker thread.
+    #
+    # The model call can take several seconds with no output. Sending nothing for
+    # that long lets an idle-connection timeout (proxy, mobile radio, or the
+    # client's own socket) tear the stream down mid-answer, which the app reports
+    # as a connection failure. Emit a lightweight keep-alive every second while
+    # waiting so the stream is never silent.
     loop = asyncio.get_running_loop()
-    try:
-        result_state = await loop.run_in_executor(
-            None,
-            run_matchmaker_turn,
-            session_id,
-            user_message,
-            history,
-            prior_constraints
-        )
-    except Exception:
-        logger.exception("Chat turn failed for session %s.", session_id)
-        yield {
-            "event": "error",
-            "data": json.dumps({
+    turn_task = loop.run_in_executor(
+        None,
+        run_matchmaker_turn,
+        session_id,
+        user_message,
+        history,
+        prior_constraints
+    )
+
+    while True:
+        try:
+            result_state = await asyncio.wait_for(asyncio.shield(turn_task), timeout=1.0)
+            break
+        except asyncio.TimeoutError:
+            # Keep-alive frame so the socket never goes idle while the model works.
+            yield _sse("ping", {"event": "ping", "session_id": session_id})
+        except Exception:
+            logger.exception("Chat turn failed for session %s.", session_id)
+            yield _sse("error", {
                 "event": "error",
                 "message": "The chat service could not process this message.",
                 "session_id": session_id
             })
-        }
-        return
+            return
 
     response_text = result_state.get("response_message", "")
     quick_replies = result_state.get("quick_replies", [])
@@ -180,31 +209,29 @@ async def _generate_sse_stream(
     words = response_text.split(" ")
     for idx, word in enumerate(words):
         chunk = word + (" " if idx < len(words) - 1 else "")
-        yield {
-            "event": "token",
-            "data": json.dumps({"event": "token", "token": chunk, "session_id": session_id})
-        }
+        yield _sse("token", {"event": "token", "token": chunk, "session_id": session_id})
         await asyncio.sleep(0.005)  # Fast natural typing rhythm
 
     # 4. If quick replies exist, emit quick-reply chips
     if quick_replies:
-        yield {
+        yield _sse("quick_replies", {
             "event": "quick_replies",
-            "data": json.dumps({"event": "quick_replies", "quick_replies": quick_replies, "options": quick_replies, "session_id": session_id})
-        }
+            "quick_replies": quick_replies,
+            "options": quick_replies,
+            "session_id": session_id,
+        })
 
-    # 5. If matches are found, emit matches and evaluations
+    # 5. If matches are found, emit matches and evaluations.
+    #    These come straight from Mongo, so they contain native datetimes and
+    #    ObjectIds — _sse handles those.
     if is_complete and (candidates or evaluations):
-        yield {
+        yield _sse("matches", {
             "event": "matches",
-            "data": json.dumps({
-                "event": "matches",
-                "candidate_matches": candidates,
-                "matches": candidates,
-                "evaluations": evaluations,
-                "session_id": session_id
-            })
-        }
+            "candidate_matches": candidates,
+            "matches": candidates,
+            "evaluations": evaluations,
+            "session_id": session_id,
+        })
 
     try:
         await _save_session_data(
@@ -218,26 +245,20 @@ async def _generate_sse_stream(
         )
     except Exception:
         logger.exception("Could not save chat session %s.", session_id)
-        yield {
+        yield _sse("error", {
             "event": "error",
-            "data": json.dumps({
-                "event": "error",
-                "message": "The response could not be saved. Please try again.",
-                "session_id": session_id
-            })
-        }
+            "message": "The response could not be saved. Please try again.",
+            "session_id": session_id,
+        })
         return
 
     # Emit done only after the response and updated state have been persisted.
-    yield {
+    yield _sse("done", {
         "event": "done",
-        "data": json.dumps({
-            "event": "done",
-            "session_id": session_id,
-            "is_complete": is_complete,
-            "response_message": response_text
-        })
-    }
+        "session_id": session_id,
+        "is_complete": is_complete,
+        "response_message": response_text,
+    })
 
 
 @router.post("/message", summary="Send chat message (supports JSON or SSE token streaming)")
@@ -261,6 +282,9 @@ async def send_chat_message(
         )
 
     effective_user_id = request_data.user_id or session_user_id
+    # Each turn can invoke the model several times; throttle per adopter.
+    rate_limit(chat_limiter, adopter_key(effective_user_id or request_data.session_id, "chat"))
+
     signup_constraints = await _load_signup_constraints(effective_user_id)
     effective_prior_constraints = {**signup_constraints, **prior_constraints}
 

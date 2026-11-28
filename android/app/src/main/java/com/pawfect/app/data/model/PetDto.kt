@@ -52,6 +52,8 @@ data class PetDto(
     @SerialName("ideal_adopter_notes") val idealAdopterNotes: String? = null,
     @SerialName("listed_at") val listedAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
-    val score: Double? = null
+    val score: Double? = null,
+    @SerialName("is_relaxed_match") val isRelaxedMatch: Boolean = false,
+    @SerialName("relaxed_fields") val relaxedFields: List<String> = emptyList()
 )
 

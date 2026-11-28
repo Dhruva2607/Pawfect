@@ -1,6 +1,7 @@
 """
-Notifications router for both shelters (JWT auth) and adopters (user_id / demo token).
+Notifications router for both shelters (JWT auth) and adopters (demo token).
 Provides polling endpoints + real-time SSE stream.
+Every endpoint requires credentials; a bare user_id query param is not sufficient.
 """
 
 import asyncio
@@ -12,6 +13,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.database.connection import get_async_db
 from app.models.notification import NotificationResponse
+from app.services.adopter_auth import user_id_from_token
 from app.services.auth import decode_jwt_token
 from app.services.notifications import notification_broker
 
@@ -23,29 +25,46 @@ def _resolve_recipient(
     user_id: Optional[str],
 ) -> Tuple[str, str]:
     """
-    Resolve (recipient_role, recipient_id) from either:
+    Resolve (recipient_role, recipient_id) from an Authorization header:
     - Shelter JWT: Authorization: Bearer <jwt>
     - Adopter demo token: Authorization: Bearer token_<user_id>
-    - Adopter query param: ?user_id=<user_id>
-    """
-    if authorization:
-        parts = authorization.split(" ", 1)
-        if len(parts) == 2 and parts[0].lower() == "bearer":
-            token = parts[1].strip()
-            if token.startswith("token_"):
-                uid = token[len("token_"):]
-                if uid:
-                    return ("adopter", uid)
-            payload = decode_jwt_token(token)
-            if payload.get("role") == "shelter" and payload.get("shelter_id"):
-                return ("shelter", payload["shelter_id"])
 
-    if user_id:
-        return ("adopter", user_id)
+    An unauthenticated ?user_id= query parameter is NOT accepted: doing so would
+    let anyone read another person's notifications. When a user_id is supplied it
+    must match the authenticated identity.
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header.",
+        )
+
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1].strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Authorization header format. Expected 'Bearer <token>'.",
+        )
+
+    token = parts[1].strip()
+
+    adopter_id = user_id_from_token(token)
+    if adopter_id:
+        if user_id and user_id != adopter_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You may only access your own notifications.",
+            )
+        return ("adopter", adopter_id)
+
+    payload = decode_jwt_token(token)
+    shelter_id = payload.get("shelter_id")
+    if payload.get("role") == "shelter" and shelter_id:
+        return ("shelter", shelter_id)
 
     raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication or user_id required to access notifications.",
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Notifications require adopter or shelter credentials.",
     )
 
 

@@ -10,6 +10,7 @@ Ownership is enforced on every route via get_current_shelter.
 """
 
 from datetime import datetime, timezone
+import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -46,7 +47,10 @@ from app.services.pet_embeddings import (
     generate_pet_embedding_async,
 )
 from app.services.notifications import create_notification
+from app.services.rate_limit import embedding_limiter, rate_limit, shelter_key
 from app.services.storage import save_pet_photo
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/shelters", tags=["Shelters"])
 
@@ -189,6 +193,23 @@ async def create_shelter_pet(
     """
     db = get_async_db()
     now = datetime.now(timezone.utc)
+
+    # Idempotency: the Android client sets retryOnConnectionFailure, which can
+    # replay a POST after a network blip. A client-supplied key collapses those
+    # retries onto one listing instead of silently creating duplicates.
+    if payload.client_request_id:
+        existing = await db["pets"].find_one({
+            "shelter_id": shelter["_id"],
+            "client_request_id": payload.client_request_id,
+        })
+        if existing:
+            logger.info(
+                "Reusing pet %s for repeated client_request_id %s",
+                existing.get("_id"),
+                payload.client_request_id,
+            )
+            return _enrich_pet_with_shelter(existing, shelter)
+
     pet_id = f"pet_{payload.species}_{uuid.uuid4().hex[:10]}"
 
     pet_data = payload.model_dump()
@@ -369,6 +390,8 @@ async def retry_pet_embedding(
     shelter: Dict[str, Any] = Depends(get_current_shelter),
 ):
     """Retry embedding generation for a pet whose embedding previously failed."""
+    rate_limit(embedding_limiter, shelter_key(shelter["_id"], "embedding"))
+
     db = get_async_db()
     existing = await _get_owned_pet_or_404(db, shelter["_id"], pet_id)
     vector, pending = await generate_pet_embedding_async(existing)

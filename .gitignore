@@ -45,6 +45,10 @@ logs/
 *.db
 /data/
 
+# --- Uploaded media (user-generated, never commit) ---
+backend/uploads/
+!backend/uploads/.gitkeep
+
 # --- Byte-compiled ---
 *.pyc
 
@@ -66,5 +70,8 @@ android/gradle/gradle-daemon-jvm.properties
 
 # --- Agent/tooling local config ---
 .commandcode/
+
+# --- Local notes (not tracked) ---
+RUN_BACKEND.md
 
 node_modules/

@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main, Aayush]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        env:
+          # Dummy values: the suite mocks the database and the LLM.
+          GOOGLE_API_KEY: ci-dummy-key
+          MONGODB_URI: mongodb://localhost:27017
+          DATABASE_NAME: pawfect_ci
+          ALLOWED_ORIGINS: "*"
+          JWT_SECRET: ci-only-secret-not-for-production
+        run: pytest -q
+
+  android:
+    name: Android build and unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Fails the build if a Google API key or Mongo connection string with
+      # credentials is committed. .env files are gitignored, but this catches
+      # accidental pastes into source or docs.
+      #
+      # Scans the working tree with grep rather than `git grep`, so untracked
+      # files are covered too.
+      - name: Scan for leaked credentials
+        run: |
+          set -euo pipefail
+          PATTERNS='AIza[0-9A-Za-z_-]{35}|mongodb(\+srv)?://[^:@/[:space:]]+:[^@/[:space:]]+@'
+          set +e
+          grep -rnIE "$PATTERNS" . \
+            --exclude-dir=.git \
+            --exclude-dir=.venv \
+            --exclude-dir=node_modules \
+            --exclude-dir=build \
+            --exclude-dir=.gradle \
+            --exclude='*.md' \
+            --exclude='*.example' \
+            --exclude='*.lock'
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "::error::Potential credential committed. Remove it and rotate the key."
+            exit 1
+          fi
+          echo "No credentials detected."

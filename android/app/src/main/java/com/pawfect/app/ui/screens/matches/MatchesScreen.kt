@@ -319,6 +319,10 @@ fun HeroMatchCard(
                     if (pet.goodWithKids) PawTag("Kid-friendly")
                     if (pet.goodWithOtherPets) PawTag("Pet-friendly")
                 }
+                if (pet.isRelaxedMatch) {
+                    Spacer(Modifier.height(12.dp))
+                    NearMatchNotice(pet.relaxedFields)
+                }
                 Spacer(Modifier.height(14.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (matchScore != null) LifestyleCheckItem("Compatibility: $matchScore%")
@@ -360,6 +364,45 @@ fun HeroMatchCard(
                     ) { Text("Apply to adopt") }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Shown when the backend had to relax one of the adopter's preferences to
+ * include this pet, so a near match is never presented as an exact fit.
+ */
+@Composable
+fun NearMatchNotice(relaxedFields: List<String>, modifier: Modifier = Modifier) {
+    val readable = relaxedFields
+        .map { it.replace('_', ' ') }
+        .joinToString(", ")
+
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (readable.isBlank()) {
+                    "Near match — this pet is close to your preferences but not an exact fit."
+                } else {
+                    "Near match — your $readable preference differs for this pet."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
         }
     }
 }

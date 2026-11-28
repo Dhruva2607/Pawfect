@@ -21,6 +21,11 @@ from app.services import auth as auth_service
 from app.services.nodes import SinglePetCompatibility
 
 
+def adopter_headers(user_id: str) -> dict:
+    """Authorization header for a demo adopter token."""
+    return {"Authorization": f"Bearer token_{user_id}"}
+
+
 class FakeCursor:
     def __init__(self, docs):
         self.docs = list(docs)
@@ -217,7 +222,7 @@ def test_apply_notifies_owning_shelter_only_and_computes_compatibility(monkeypat
         token_a, shelter_a, pet_a = _create_shelter_and_pet(client, "Shelter A", "a@org.in", "Mochi")
         token_b, shelter_b, _ = _create_shelter_and_pet(client, "Shelter B", "b@org.in", "Rocky")
 
-        res = client.post("/api/v1/adoptions/apply", json={
+        res = client.post("/api/v1/adoptions/apply", headers=adopter_headers("user_priya"), json={
             "user_id": "user_priya",
             "pet_id": pet_a,
             "applicant_name": "Priya Sharma",
@@ -256,14 +261,14 @@ def test_stage_transitions_and_adopt_auto_declines_other_applicants(monkeypatch)
         token_a, _, pet_a = _create_shelter_and_pet(client, "Shelter A", "a@org.in", "Mochi")
         token_b, _, _ = _create_shelter_and_pet(client, "Shelter B", "b@org.in", "Rocky")
 
-        app1 = client.post("/api/v1/adoptions/apply", json={
+        app1 = client.post("/api/v1/adoptions/apply", headers=adopter_headers("user_priya"), json={
             "user_id": "user_priya",
             "pet_id": pet_a,
             "applicant_name": "Priya Sharma",
             "applicant_email": "priya@example.com",
         }).json()["application_id"]
 
-        app2 = client.post("/api/v1/adoptions/apply", json={
+        app2 = client.post("/api/v1/adoptions/apply", headers=adopter_headers("user_arjun"), json={
             "user_id": "user_arjun",
             "pet_id": pet_a,
             "applicant_name": "Arjun Mehta",
@@ -310,11 +315,15 @@ def test_stage_transitions_and_adopt_auto_declines_other_applicants(monkeypatch)
         assert pet_doc["status"] == "adopted"
 
         # Arjun's competing application was auto-declined to 'rejected'
-        arjun_status = client.get(f"/api/v1/adoptions/{app2}/status").json()
+        arjun_status = client.get(
+            f"/api/v1/adoptions/{app2}/status", headers=adopter_headers("user_arjun")
+        ).json()
         assert arjun_status["stage_status"] == "rejected"
 
         # Arjun received an auto-decline notification
-        arjun_notifs = client.get("/api/v1/notifications?user_id=user_arjun").json()
+        arjun_notifs = client.get(
+            "/api/v1/notifications", headers=adopter_headers("user_arjun")
+        ).json()
         assert any(n["type"] == "application_auto_declined" for n in arjun_notifs)
 
         # Stats reflect adopted pet & applications

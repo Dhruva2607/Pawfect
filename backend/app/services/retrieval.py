@@ -267,8 +267,14 @@ def hybrid_search_pets(
     logger.info("Executing hybrid search with MQL filter: %s", mql_filter)
     results = _run_vector_or_cosine_search(pets_col, query_vector, mql_filter, top_k)
 
+    # Track which adopter constraints were dropped to fill the candidate list, so
+    # the scorer and UI can label these pets as near-matches rather than
+    # presenting them as exact fits.
+    relaxed: set[str] = set()
+
     # 2. If fewer than top_k matches and soft preferences were applied, relax soft preferences for alternatives
     if len(results) < top_k and any(constraints.get(k) is not None for k in _SOFT_PREFERENCE_KEYS):
+        relaxed.update(k for k in _SOFT_PREFERENCE_KEYS if constraints.get(k) is not None)
         relaxed_constraints = {k: v for k, v in constraints.items() if k not in _SOFT_PREFERENCE_KEYS}
         relaxed_filter = build_mql_prefilter(relaxed_constraints)
         logger.info("Filling alternative matches with relaxed soft preferences: %s", relaxed_filter)
@@ -283,6 +289,9 @@ def hybrid_search_pets(
 
     # 3. If still fewer than top_k (e.g. strict energy/housing combo), relax energy/housing while keeping species/safety
     if len(results) < top_k and (constraints.get("energy_budget") is not None or constraints.get("housing_type") is not None):
+        for dropped in ("energy_budget", "housing_type"):
+            if constraints.get(dropped) is not None:
+                relaxed.add(dropped)
         core_constraints = {
             k: v for k, v in constraints.items()
             if k in ("species", "has_children", "has_other_pets", "allergies")
@@ -299,7 +308,18 @@ def hybrid_search_pets(
                     if len(results) >= top_k:
                         break
 
-    return _attach_shelter_metadata(results[:top_k], db)
+    finalized = _attach_shelter_metadata(results[:top_k], db)
+    if relaxed:
+        relaxed_list = sorted(relaxed)
+        logger.info("Marking %d candidate(s) as near-match (relaxed: %s)", len(finalized), relaxed_list)
+        for pet in finalized:
+            pet["relaxed_fields"] = relaxed_list
+            pet["is_relaxed_match"] = True
+    else:
+        for pet in finalized:
+            pet["relaxed_fields"] = []
+            pet["is_relaxed_match"] = False
+    return finalized
 
 
 def _attach_shelter_metadata(pets: List[Dict[str, Any]], db: Database) -> List[Dict[str, Any]]:

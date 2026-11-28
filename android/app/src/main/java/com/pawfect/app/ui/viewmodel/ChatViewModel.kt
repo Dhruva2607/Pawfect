@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -56,6 +57,7 @@ class ChatViewModel @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true }
     private val session = sessionManager.currentSession()
     private val sessionId = sessionManager.chatSessionId()
+    private var streamJob: Job? = null
     private val _uiState = MutableStateFlow(
         ChatUiState(
             sessionId = sessionId,
@@ -85,14 +87,14 @@ class ChatViewModel @Inject constructor(
         val userMsg = UiChatMessage(isUser = true, text = text.trim())
         val botStreamingMsg = UiChatMessage(isUser = false, text = "", isStreaming = true)
 
+        // Keep the current recommendation visible while the next turn streams.
+        // Clearing it here made the match card vanish on every follow-up
+        // question and never return, because most turns do not produce matches.
         _uiState.update {
             it.copy(
                 messages = it.messages + userMsg + botStreamingMsg,
                 isTyping = true,
                 quickReplies = emptyList(),
-                candidateMatches = emptyList(),
-                evaluations = emptyList(),
-                displayedMatchIndex = 0,
                 isComplete = false,
                 error = null
             )
@@ -102,7 +104,10 @@ class ChatViewModel @Inject constructor(
 
         val sessionId = _uiState.value.sessionId
 
-        viewModelScope.launch {
+        // Cancel any in-flight turn so a slow earlier response cannot append to
+        // the message list after a newer one has started.
+        streamJob?.cancel()
+        streamJob = viewModelScope.launch {
             try {
                 chatRepository.streamChat(
                     sessionId = sessionId,
@@ -161,19 +166,26 @@ class ChatViewModel @Inject constructor(
                             }
                             is SseChatEvent.Error -> {
                                 _uiState.update { state ->
+                                    val reason = event.throwable.localizedMessage
+                                        ?: "The matchmaker could not connect. Please try again."
                                     val updatedMessages = state.messages.map { msg ->
                                         if (msg.id == botStreamingMsg.id && msg.text.isEmpty()) {
-                                            msg.copy(
-                                                text = "I encountered an error connecting to the matchmaker. Please check that the backend is running.",
-                                                isStreaming = false
-                                            )
+                                            msg.copy(text = reason, isStreaming = false)
                                         } else msg.copy(isStreaming = false)
                                     }
+                                    // If the model already produced a full answer,
+                                    // a late transport error should not be shown
+                                    // over it — the user got their result.
+                                    val alreadyAnswered = updatedMessages
+                                        .firstOrNull { it.id == botStreamingMsg.id }
+                                        ?.text
+                                        .isNullOrBlank()
+                                        .not()
+
                                     state.copy(
                                         messages = updatedMessages,
                                         isTyping = false,
-                                        error = event.throwable.localizedMessage
-                                            ?: "The matchmaker could not connect. Please try again."
+                                        error = if (alreadyAnswered) null else reason
                                     )
                                 }
                                 persistMessages()
@@ -183,6 +195,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                Log.e("ChatViewModel", "Chat turn failed.", e)
                 _uiState.update { state ->
                     val updatedMessages = state.messages.map { message ->
                         if (message.id == botStreamingMsg.id) {
@@ -196,10 +209,22 @@ class ChatViewModel @Inject constructor(
                             message
                         }
                     }
+                    // An error event already rendered the failure (it clears
+                    // `isTyping` and writes a message); do not overwrite it.
+                    val alreadyReported = state.error != null &&
+                        updatedMessages.firstOrNull { it.id == botStreamingMsg.id }
+                            ?.text
+                            .isNullOrBlank()
+                            .not()
+
                     state.copy(
                         messages = updatedMessages,
                         isTyping = false,
-                        error = e.localizedMessage ?: "The matchmaker could not connect. Please try again."
+                        error = if (alreadyReported) {
+                            state.error
+                        } else {
+                            e.localizedMessage ?: "The matchmaker could not connect. Please try again."
+                        }
                     )
                 }
                 persistMessages()

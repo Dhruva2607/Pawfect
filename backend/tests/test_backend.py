@@ -481,23 +481,23 @@ def test_adoption_duplicate_submission_rejected(monkeypatch):
     )
 
     # 1. First submission should succeed
-    first_res = asyncio.run(adoptions.apply_adoption(req))
+    first_res = asyncio.run(adoptions.apply_adoption(req, current_user_id=req.user_id))
     assert first_res.applicant_name == "John Doe"
     assert first_res.pet_id == "pet_dog_001"
 
     # 2. Second submission for same user and pet MUST be rejected with HTTP 409
     with pytest.raises(HTTPException) as excinfo:
-        asyncio.run(adoptions.apply_adoption(req))
+        asyncio.run(adoptions.apply_adoption(req, current_user_id=req.user_id))
     assert excinfo.value.status_code == 409
     assert "already submitted" in excinfo.value.detail.lower()
 
     # 3. Check endpoint returns existing application
-    check_res = asyncio.run(adoptions.get_user_pet_application("user_123", "pet_dog_001"))
+    check_res = asyncio.run(adoptions.get_user_pet_application("user_123", "pet_dog_001", current_user_id="user_123"))
     assert check_res is not None
     assert check_res.application_id == first_res.application_id
 
     # 4. Check endpoint returns None for unapplied pet
-    none_res = asyncio.run(adoptions.get_user_pet_application("user_123", "pet_dog_999"))
+    none_res = asyncio.run(adoptions.get_user_pet_application("user_123", "pet_dog_999", current_user_id="user_123"))
     assert none_res is None
 
 
@@ -754,7 +754,7 @@ def test_generate_shelter_profile_saves_to_user_profile(monkeypatch):
     profiles = FakeProfilesCollection()
     monkeypatch.setattr(users, "get_async_db", lambda: FakeDatabase({"user_profiles": profiles}))
 
-    resp = asyncio.run(users.generate_shelter_profile("user_p1"))
+    resp = asyncio.run(users.generate_shelter_profile("user_p1", current_user_id="user_p1"))
 
     assert resp.user_id == "user_p1"
     assert resp.adopter_name == "Alex"
@@ -793,6 +793,7 @@ def test_update_user_profile_ignores_explicit_null_fields(monkeypatch):
     updated = asyncio.run(users.update_user_profile(
         "user_null_test",
         UserProfileUpdateRequest(name=None, email=None, housing_type="house_with_yard"),
+        current_user_id="user_null_test",
     ))
 
     assert updated.name == "Alex"

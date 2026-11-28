@@ -135,6 +135,17 @@ class PetResponse(Pet):
     shelter_name: Optional[str] = Field(default=None, description="Display name of the listing shelter")
     shelter_city: Optional[str] = Field(default=None, description="City of the listing shelter")
 
+    # Match-quality disclosure. Set by retrieval when a soft preference had to be
+    # dropped to include this pet, so clients can label it a near match.
+    is_relaxed_match: bool = Field(
+        default=False,
+        description="True when this pet was returned by relaxing one or more adopter preferences",
+    )
+    relaxed_fields: List[str] = Field(
+        default_factory=list,
+        description="Adopter constraint names that were relaxed to include this pet",
+    )
+
 
 def validate_complete_for_available(pet_data: Dict[str, Any]) -> None:
     """
@@ -200,6 +211,9 @@ class PetCreateRequest(BaseModel):
     min_experience: Optional[str] = None
     not_suitable_for_young_children: Optional[bool] = None
     ideal_adopter_notes: Optional[str] = Field(None, max_length=1000)
+
+    # Optional client-generated key so a retried request creates one pet, not two.
+    client_request_id: Optional[str] = Field(None, max_length=64)
 
     @model_validator(mode="after")
     def _validate_listing_completeness(self) -> "PetCreateRequest":

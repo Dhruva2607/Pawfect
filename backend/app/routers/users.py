@@ -6,13 +6,14 @@ User Profile and Saved Pets (Favorites) endpoints.
 import hashlib
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 
 from app.database.connection import get_async_db
 from app.models.user_profile import UserProfile
 from app.models.pet import Pet, PetResponse
+from app.services.adopter_auth import get_current_adopter, require_self
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -150,19 +151,27 @@ async def user_signup(req: AuthRequest):
 
 
 @router.get("/{id}/profile", response_model=UserProfile, summary="Get User Profile")
-async def get_user_profile(id: str):
+async def get_user_profile(id: str, current_user_id: str = Depends(get_current_adopter)):
     """
     Fetches user profile details for Profile Hub (Screen 8).
+    Only the authenticated adopter may read their own profile.
     """
+    require_self(id, current_user_id)
     user_doc = await _get_or_create_user(id)
     return UserProfile(**user_doc)
 
 
 @router.put("/{id}/profile", response_model=UserProfile, summary="Update User Profile")
-async def update_user_profile(id: str, updates: UserProfileUpdateRequest):
+async def update_user_profile(
+    id: str,
+    updates: UserProfileUpdateRequest,
+    current_user_id: str = Depends(get_current_adopter),
+):
     """
     Updates user lifestyle profile baseline and preferences.
+    Only the authenticated adopter may update their own profile.
     """
+    require_self(id, current_user_id)
     db = get_async_db()
     await _get_or_create_user(id)
 
@@ -179,11 +188,12 @@ async def update_user_profile(id: str, updates: UserProfileUpdateRequest):
 
 
 @router.post("/{id}/shelter-profile", response_model=ShelterProfileResponse, summary="Generate and Save Profile")
-async def generate_shelter_profile(id: str):
+async def generate_shelter_profile(id: str, current_user_id: str = Depends(get_current_adopter)):
     """
     Generates a structured adopter profile from the user's stored sign-up answers
     and saves it to their UserProfile document.
     """
+    require_self(id, current_user_id)
     db = get_async_db()
     user_doc = await _get_or_create_user(id)
 
@@ -246,12 +256,13 @@ async def generate_shelter_profile(id: str):
     response_model=List[PetResponse],
     summary="Get User's Saved/Favorite Pets"
 )
-async def get_saved_pets(id: str):
+async def get_saved_pets(id: str, current_user_id: str = Depends(get_current_adopter)):
     """
     [FROM MARKDOWN: Step 3.2 & Section 4]
     GET /api/v1/users/{id}/saved-pets
     Returns list of Pet documents saved/favorited by the user.
     """
+    require_self(id, current_user_id)
     db = get_async_db()
     user_doc = await _get_or_create_user(id)
     saved_ids = user_doc.get("saved_pets", [])
@@ -265,12 +276,17 @@ async def get_saved_pets(id: str):
 
 
 @router.post("/{id}/favorite/{petId}", response_model=FavoriteToggleResponse, summary="Toggle Pet Favorite Status")
-async def toggle_favorite_pet(id: str, petId: str):
+async def toggle_favorite_pet(
+    id: str,
+    petId: str,
+    current_user_id: str = Depends(get_current_adopter),
+):
     """
     [FROM MARKDOWN: Step 3.2]
     POST /api/v1/users/{id}/favorite/{petId}
     Toggles a pet in the user's saved favorites list (heart button in Match Card / Pet Profile).
     """
+    require_self(id, current_user_id)
     db = get_async_db()
 
     # Verify target pet exists

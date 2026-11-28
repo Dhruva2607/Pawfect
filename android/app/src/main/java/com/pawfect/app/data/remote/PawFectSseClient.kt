@@ -61,15 +61,37 @@ class PawFectSseClient @Inject constructor(
 
         val factory = EventSources.createFactory(okHttpClient)
 
+        // OkHttp's EventSource reports onFailure in three situations we must not
+        // surface as a chat error:
+        //   1. a null throwable, when the server closes right after our own close
+        //   2. a cancellation, when the collector goes away (tab switch / new turn)
+        //   3. any failure after the terminal `done`/`error` event
+        // Tracking this here stops the bogus "could not connect" message.
+        var streamFinished = false
+        var failureReceived = false
+        var cancelled = false
+
         val listener = object : EventSourceListener() {
             override fun onOpen(eventSource: EventSource, response: Response) {
                 if (!response.isSuccessful) {
                     Log.e(TAG, "SSE connection failed with HTTP ${response.code}.")
-                    trySend(
-                        SseChatEvent.Error(
-                            IllegalStateException("Server returned HTTP ${response.code}.")
-                        )
-                    )
+                    streamFinished = true
+                    failureReceived = true
+                    // 429 means "slow down", not "network broken". Say so, and
+                    // surface the server's Retry-After when present.
+                    val message = when (response.code) {
+                        429 -> {
+                            val wait = response.header("Retry-After")
+                            if (wait.isNullOrBlank()) {
+                                "You're sending messages too quickly. Please wait a moment and try again."
+                            } else {
+                                "You're sending messages too quickly. Please wait ${wait}s and try again."
+                            }
+                        }
+                        401, 403 -> "Your session expired. Please sign in again."
+                        else -> "The matchmaker is unavailable right now (HTTP ${response.code})."
+                    }
+                    trySend(SseChatEvent.Error(IllegalStateException(message)))
                     close()
                     return
                 }
@@ -121,6 +143,7 @@ class PawFectSseClient @Inject constructor(
                             val jsonObj = json.parseToJsonElement(data).jsonObject
                             val responseMsg = jsonObj["response_message"]?.jsonPrimitive?.content ?: ""
                             val isComplete = jsonObj["is_complete"]?.jsonPrimitive?.booleanOrNull ?: false
+                            streamFinished = true
                             trySend(SseChatEvent.Done(responseMsg, isComplete))
                             close()
                         }
@@ -128,9 +151,16 @@ class PawFectSseClient @Inject constructor(
                             val jsonObj = json.parseToJsonElement(data).jsonObject
                             val message = jsonObj["message"]?.jsonPrimitive?.content
                                 ?: "The matchmaker could not process this message."
+                            streamFinished = true
+                            failureReceived = true
                             trySend(SseChatEvent.Error(IllegalStateException(message)))
                             close()
                         }
+                        // Server keep-alive while the model is thinking. It
+                        // proves the stream is healthy; nothing to render.
+                        "ping" -> Unit
+                        // `: comment` keep-alives from proxies arrive with no type.
+                        null -> Unit
                         else -> {
                             Log.d(TAG, "Unhandled SSE Event: $type, data: $data")
                         }
@@ -142,17 +172,50 @@ class PawFectSseClient @Inject constructor(
             }
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
+                // The collector cancelled us (tab switch, new turn, screen exit).
+                if (cancelled) {
+                    Log.d(TAG, "Ignoring SSE failure after cancellation.")
+                    close()
+                    return
+                }
+                // Terminal event already delivered; a null throwable here is the
+                // transport noticing our own close, not a real failure.
+                if (streamFinished) {
+                    Log.d(TAG, "Ignoring post-completion SSE close: ${t?.message}")
+                    close()
+                    return
+                }
+                if (failureReceived) {
+                    close()
+                    return
+                }
+
                 val failure = t ?: Exception(
                     response?.let { "SSE connection failed with HTTP ${it.code}." }
                         ?: "SSE connection failure"
                 )
-                Log.e(TAG, "SSE Failure: ${failure.message}")
+                Log.e(TAG, "SSE Failure: ${failure.javaClass.simpleName}: ${failure.message}")
+                streamFinished = true
+                failureReceived = true
                 trySend(SseChatEvent.Error(failure))
-                close(failure)
+                // Close normally: closing *with* a cause rethrows it into the
+                // collector, which surfaced a second, unhelpful error.
+                close()
             }
 
             override fun onClosed(eventSource: EventSource) {
                 Log.d(TAG, "SSE Connection Closed.")
+                if (!streamFinished && !cancelled && !failureReceived) {
+                    // Server hung up without a terminal event — tell the user
+                    // instead of silently ending with a half-written answer.
+                    Log.w(TAG, "Stream ended without a terminal event.")
+                    trySend(
+                        SseChatEvent.Error(
+                            IllegalStateException("The connection ended before the reply finished.")
+                        )
+                    )
+                }
+                streamFinished = true
                 close()
             }
         }
@@ -160,6 +223,9 @@ class PawFectSseClient @Inject constructor(
         val eventSource = factory.newEventSource(request, listener)
 
         awaitClose {
+            // The collector has gone away; suppress the failure OkHttp will
+            // report for the cancelled call.
+            cancelled = true
             eventSource.cancel()
         }
     }

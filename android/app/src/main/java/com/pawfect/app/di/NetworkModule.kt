@@ -62,9 +62,21 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .addInterceptor(logging)
             .addInterceptor { chain ->
-                val token = shelterSessionManager.currentSession()?.token
-                    ?: sessionManager.currentSession()?.token
-                val request = chain.request().newBuilder().apply {
+                val original = chain.request()
+                val path = original.url.encodedPath
+
+                // Shelter endpoints must carry the shelter JWT; everything else is
+                // adopter-scoped. Using shelter-first precedence leaked shelter
+                // credentials onto adopter calls and broke per-user scoping.
+                val token = if (path.contains("/shelters")) {
+                    shelterSessionManager.currentSession()?.token
+                } else {
+                    sessionManager.currentSession()?.token
+                        ?: shelterSessionManager.currentSession()?.token
+                }
+
+                val request = original.newBuilder().apply {
+                    removeHeader("Authorization")
                     if (!token.isNullOrBlank()) {
                         header("Authorization", "Bearer $token")
                     }

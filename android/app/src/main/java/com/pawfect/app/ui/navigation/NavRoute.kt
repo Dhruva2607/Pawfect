@@ -57,6 +57,9 @@ sealed class NavRoute(val route: String) {
         fun createRoute(petId: String) = "adoption_stepper/$petId"
     }
 
+    // Adopter-side application tracker
+    object AdoptionTracker : NavRoute("adoption_tracker")
+
     // Screen 8: User Profile Hub
     object Profile : NavRoute("profile")
 

@@ -16,6 +16,7 @@ from app.models.pet import Pet
 from app.services.compatibility import compute_heuristic_compatibility
 from app.services.llm import get_chat_llm
 from app.services.nodes import SinglePetCompatibility
+from app.services.rate_limit import adopter_key, eval_limiter, rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,8 @@ async def direct_eval(request: DirectEvalRequest):
     Returns grounded 0-100% score, exact pros, and caveats.
     Persists evaluation record to 'match_evaluations' collection.
     """
+    rate_limit(eval_limiter, adopter_key(request.session_id, "direct_eval"))
+
     db = get_async_db()
     pet_doc = await db["pets"].find_one({"_id": request.pet_id})
     if not pet_doc:

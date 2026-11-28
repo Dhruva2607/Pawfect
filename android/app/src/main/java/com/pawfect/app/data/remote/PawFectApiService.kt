@@ -51,6 +51,12 @@ interface PawFectApiService {
     @POST("adoptions/apply")
     suspend fun applyAdoption(@Body request: AdoptionApplyRequestDto): AdoptionStatusResponseDto
 
+    @GET("adoptions/mine")
+    suspend fun getMyApplications(
+        @Query("skip") skip: Int = 0,
+        @Query("limit") limit: Int = 50
+    ): List<AdoptionStatusResponseDto>
+
     @GET("adoptions/{id}/status")
     suspend fun getAdoptionStatus(@Path("id") id: String): AdoptionStatusResponseDto
 

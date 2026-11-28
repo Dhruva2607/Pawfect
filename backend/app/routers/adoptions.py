@@ -7,7 +7,7 @@ compatibility_score, record stage_history, and notify the owning shelter in real
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.database.connection import get_async_db
@@ -17,8 +17,10 @@ from app.models.adoption_application import (
     StageHistoryEntry,
 )
 from app.models.pet import Pet
+from app.services.adopter_auth import get_current_adopter, require_self
 from app.services.compatibility import evaluate_pet_compatibility
 from app.services.notifications import create_notification
+from app.services.rate_limit import adopter_key, apply_limiter, rate_limit
 
 router = APIRouter(prefix="/adoptions", tags=["Adoptions"])
 
@@ -92,7 +94,10 @@ def _app_doc_to_status_response(app_doc: Dict[str, Any], pet_name: Optional[str]
 
 
 @router.post("/apply", response_model=AdoptionStatusResponse, status_code=status.HTTP_201_CREATED, summary="Submit Adoption Application")
-async def apply_adoption(request: AdoptionApplyRequest):
+async def apply_adoption(
+    request: AdoptionApplyRequest,
+    current_user_id: str = Depends(get_current_adopter),
+):
     """
     [FROM MARKDOWN: Step 3.2 & Section 4]
     POST /api/v1/adoptions/apply
@@ -100,6 +105,9 @@ async def apply_adoption(request: AdoptionApplyRequest):
     Copies shelter_id, snapshots lifestyle, computes compatibility score, and
     notifies the owning shelter.
     """
+    require_self(request.user_id, current_user_id)
+    rate_limit(apply_limiter, adopter_key(request.user_id, "apply"))
+
     db = get_async_db()
 
     user_doc = await db["user_profiles"].find_one({"_id": request.user_id})
@@ -187,12 +195,45 @@ async def apply_adoption(request: AdoptionApplyRequest):
     return _app_doc_to_status_response(app_record.model_dump(by_alias=True), pet.name)
 
 
+@router.get(
+    "/mine",
+    response_model=List[AdoptionStatusResponse],
+    summary="List My Adoption Applications",
+)
+async def list_my_applications(
+    current_user_id: str = Depends(get_current_adopter),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """
+    Returns every adoption application submitted by the authenticated adopter,
+    newest first. This is what backs the adopter-side application tracker; the
+    shelter side already had a list, but adopters could only look up a single
+    application by id if they still had it.
+    """
+    db = get_async_db()
+    cursor = (
+        db["adoption_applications"]
+        .find({"user_id": current_user_id})
+        .sort("updated_at", -1)
+        .skip(skip)
+        .limit(limit)
+    )
+    docs = await cursor.to_list(length=limit)
+
+    results: List[AdoptionStatusResponse] = []
+    for app_doc in docs:
+        results.append(_app_doc_to_status_response(app_doc, app_doc.get("pet_name")))
+    return results
+
+
 @router.get("/{id}/status", response_model=AdoptionStatusResponse, summary="Get Adoption Application Status")
-async def get_adoption_status(id: str):
+async def get_adoption_status(id: str, current_user_id: str = Depends(get_current_adopter)):
     """
     [FROM MARKDOWN: Step 3.2]
     GET /api/v1/adoptions/{id}/status
     Fetches the live stage status for an adoption application.
+    Only the applicant may read their own application.
     """
     db = get_async_db()
     app_doc = await db["adoption_applications"].find_one({"_id": id})
@@ -201,6 +242,7 @@ async def get_adoption_status(id: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Adoption application with ID '{id}' not found."
         )
+    require_self(app_doc.get("user_id", ""), current_user_id)
 
     pet_name = app_doc.get("pet_name")
     if not pet_name:
@@ -212,11 +254,16 @@ async def get_adoption_status(id: str):
 
 
 @router.get("/user/{user_id}/pet/{pet_id}", response_model=Optional[AdoptionStatusResponse], summary="Check User Application for Pet")
-async def get_user_pet_application(user_id: str, pet_id: str):
+async def get_user_pet_application(
+    user_id: str,
+    pet_id: str,
+    current_user_id: str = Depends(get_current_adopter),
+):
     """
     Returns the user's existing adoption application for a specific pet, if any.
     Used by frontend to check if user has already submitted an application.
     """
+    require_self(user_id, current_user_id)
     db = get_async_db()
     app_doc = await db["adoption_applications"].find_one({
         "user_id": user_id,

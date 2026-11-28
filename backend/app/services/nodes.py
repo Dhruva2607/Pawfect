@@ -127,6 +127,189 @@ def _repeats_known_signup_field(question: str, prior_constraints: Dict[str, Any]
     return False
 
 
+# ── Deterministic constraint merging & extraction (P2) ───────────────
+#
+# The intake LLM does not reliably echo every previously-known constraint back
+# on each turn, and a prompt instruction alone cannot stop it re-asking an
+# answered question. Two deterministic helpers below enforce the contract:
+#
+#   1. merge_constraints() never lets a later blank erase an earlier answer.
+#   2. extract_from_replies() maps the exact quick-reply chips the mobile UI
+#      sends back to canonical values, so a tapped answer is always recorded
+#      even if the LLM omits it.
+
+def merge_constraints(prior: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge extracted constraints over prior ones without losing known values.
+
+    A key is only overwritten when the new value is meaningful (not None and not
+    an empty string). This is the core fix for the repeat-question loop: LLM
+    responses that omit a field can no longer wipe it from the session.
+    """
+    merged: Dict[str, Any] = {
+        k: v for k, v in (prior or {}).items() if v is not None and v != ""
+    }
+    for key, value in (new or {}).items():
+        if value is None or value == "":
+            continue
+        merged[key] = value
+    return merged
+
+
+# Quick-reply chip text -> canonical adopter value, keyed by adopter field.
+# Chips come from matching_schema.MATCHING_DIMENSIONS.chat_quick_replies and are
+# sent verbatim by the Android client when tapped.
+_REPLY_VALUES: Dict[str, Dict[str, Any]] = {
+    "species": {
+        "looking for a dog": "dog",
+        "looking for a cat": "cat",
+        "open to either": "any",
+    },
+    "preferred_age_group": {
+        "puppy or kitten": "puppy_or_kitten",
+        "kitten": "puppy_or_kitten",
+        "puppy": "puppy_or_kitten",
+        "young (1-3 yrs)": "young",
+        "adult (3-7 yrs)": "adult",
+        "senior (7+ yrs)": "senior",
+        "any age": "any",
+    },
+    "preferred_size": {
+        "small": "small",
+        "medium": "medium",
+        "large": "large",
+        "any size": "any",
+    },
+    "grooming_tolerance": {
+        "low maintenance": "low",
+        "moderate brushing": "moderate",
+        "high grooming is fine": "high",
+    },
+    "noise_tolerance": {
+        "quiet (minimal barking/meowing)": "quiet",
+        "quiet": "quiet",
+        "vocal pets are fine": "vocal",
+        "moderate": "moderate",
+    },
+    "daily_alone_hours": {
+        "0-3 hours": 2,
+        "4-6 hours": 5,
+        "6+ hours": 7,
+    },
+    "experience_level": {
+        "first-time owner": "first_time",
+        "first time owner": "first_time",
+        "experienced owner": "experienced",
+    },
+    "housing_type": {
+        "house with yard": "house_with_yard",
+        "house without yard": "house_without_yard",
+        "apartment": "apartment",
+    },
+    "energy_budget": {
+        "calm & low energy": 2,
+        "calm and low energy": 2,
+        "moderate daily walks": 3,
+        "high energy & active": 5,
+        "high energy and active": 5,
+    },
+    "has_children": {
+        "no children": False,
+        "have young children": True,
+        "have children": True,
+    },
+    "has_other_pets": {
+        "no other pets": False,
+        "have other pets": True,
+    },
+    "allergies": {
+        "no allergies": False,
+        "yes, need low-shedding": True,
+        "yes, need low shedding": True,
+    },
+}
+
+# Chips whose text names more than one dimension.
+_COMBINED_REPLIES: Dict[str, Dict[str, Any]] = {
+    "have children & pets": {"has_children": True, "has_other_pets": True},
+    "have children and pets": {"has_children": True, "has_other_pets": True},
+    "no children or pets": {"has_children": False, "has_other_pets": False},
+    "no children or other pets": {"has_children": False, "has_other_pets": False},
+    "no kids or pets": {"has_children": False, "has_other_pets": False},
+}
+
+
+def _normalize_reply(text: str) -> str:
+    """Lowercase and collapse whitespace so chip text compares reliably."""
+    return " ".join((text or "").lower().split())
+
+
+# Keywords that identify which dimension a follow-up question is asking about.
+# Used to stop the model re-asking an already-answered question.
+_DIMENSION_QUESTION_KEYWORDS: Dict[str, tuple] = {
+    "species": ("dog or a cat", "dog or cat", "which species"),
+    "preferred_age_group": ("age group", "how old", "puppy or kitten"),
+    "preferred_size": ("what size", "size pet", "size preference"),
+    "grooming_tolerance": ("grooming", "brushing", "coat upkeep"),
+    "noise_tolerance": ("noise", "barking", "meowing", "vocal"),
+    "daily_alone_hours": ("hours a day", "spend alone", "left alone"),
+    "experience_level": ("owned a pet", "first-time", "first time owner", "experience"),
+    "housing_type": ("living space", "what kind of home", "apartment or house"),
+    "energy_budget": ("activity level", "energy", "daily walks"),
+    "has_children": ("children", "kids"),
+    "has_other_pets": ("other pets", "resident pets"),
+    "allergies": ("allerg", "low-shedding", "shedding"),
+}
+
+
+def _repeats_known_constraint(question: str, constraints: Dict[str, Any]) -> bool:
+    """
+    True when the question asks about a dimension that already has an answer.
+
+    This operates on the merged constraints (not just sign-up fields), so a
+    question the adopter already answered in chat is also suppressed.
+    """
+    q_lower = (question or "").lower()
+    if not q_lower:
+        return False
+
+    for field, keywords in _DIMENSION_QUESTION_KEYWORDS.items():
+        if constraints.get(field) is None:
+            continue
+        if any(kw in q_lower for kw in keywords):
+            return True
+    return False
+
+
+def extract_from_replies(message: str) -> Dict[str, Any]:
+    """
+    Extract constraints from a message that is (or contains) quick-reply chip text.
+
+    Chips are sent verbatim by the client, so an exact normalized match is safe.
+    Substring matching is restricted to distinctive multi-word chips to avoid
+    false positives such as "large" inside "large yard".
+    """
+    text = _normalize_reply(message)
+    if not text:
+        return {}
+
+    found: Dict[str, Any] = {}
+
+    for phrase, values in _COMBINED_REPLIES.items():
+        if text == phrase:
+            found.update(values)
+
+    for field, mapping in _REPLY_VALUES.items():
+        if field in found:
+            continue
+        for phrase, value in mapping.items():
+            if text == phrase or (len(phrase) >= 12 and phrase in text):
+                found[field] = value
+                break
+
+    return found
+
+
 # ── Node 1: Conversational Intake Node ───────────────────────────────
 
 def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
@@ -229,9 +412,13 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
                 "next_node": "await_user"
             }
 
-        updated_constraints = analysis.extracted_constraints.model_dump(exclude_none=True)
-        # Merge with prior (including sign-up baseline), then let an explicit species request in the newest message win
-        merged_constraints = {**prior_constraints, **updated_constraints}
+        llm_constraints = analysis.extracted_constraints.model_dump(exclude_none=True)
+        # Record answers that arrived as quick-reply chips even when the LLM omits them.
+        chip_constraints = extract_from_replies(user_msg)
+        # Merge without ever letting a blank response erase a known constraint.
+        merged_constraints = merge_constraints(prior_constraints, llm_constraints)
+        merged_constraints = merge_constraints(merged_constraints, chip_constraints)
+        # The newest message wins for an explicitly named species.
         merged_constraints = _apply_species_override(merged_constraints, user_msg)
 
         if analysis.is_sufficient_for_search:
@@ -258,7 +445,9 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         else:
             follow_up_q = analysis.follow_up_question
             quick_replies = analysis.suggested_quick_replies
-            if _repeats_known_signup_field(follow_up_q, prior_constraints):
+            # Only replace the model's question when it is asking for something we
+            # already know; never override an otherwise useful follow-up.
+            if _repeats_known_constraint(follow_up_q, merged_constraints):
                 follow_up_q, quick_replies = _next_missing_question(merged_constraints)
             return {
                 "extracted_constraints": merged_constraints,
@@ -334,6 +523,48 @@ def hybrid_retrieval_node(state: MatchmakerState) -> Dict[str, Any]:
 
 # ── Node 3: Reasoning & Scoring Node ─────────────────────────────────
 
+RELAXED_MATCH_SCORE_CAP = 84
+
+
+def _apply_relaxed_match_disclosure(
+    evaluations: List[Dict[str, Any]],
+    candidates: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Enforce honest scoring for near-match candidates.
+
+    Retrieval may drop soft constraints (size, grooming, noise, housing, energy)
+    to fill the candidate list. Prompt instructions alone are not a guarantee, so
+    the cap and the caveat are applied deterministically here:
+      - score is capped at RELAXED_MATCH_SCORE_CAP
+      - a caveat naming the relaxed preference is appended if the model omitted it
+    """
+    by_id = {c.get("_id"): c for c in candidates}
+    by_name = {c.get("name"): c for c in candidates}
+
+    for ev in evaluations:
+        pet = by_id.get(ev.get("pet_id")) or by_name.get(ev.get("pet_name"))
+        if not pet or not pet.get("is_relaxed_match"):
+            continue
+
+        relaxed_fields = pet.get("relaxed_fields") or []
+        if ev.get("compatibility_score", 0) > RELAXED_MATCH_SCORE_CAP:
+            ev["compatibility_score"] = RELAXED_MATCH_SCORE_CAP
+
+        if relaxed_fields:
+            human = [f.replace("_", " ") for f in relaxed_fields]
+            note = f"Near match: your {', '.join(human)} preference differs from this pet."
+            caveats = list(ev.get("caveats") or [])
+            if not any(note.lower()[:30] in (c or "").lower() for c in caveats):
+                caveats.append(note)
+            ev["caveats"] = caveats
+
+        ev["is_relaxed_match"] = True
+        ev["relaxed_fields"] = relaxed_fields
+
+    return evaluations
+
+
 def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
     """
     Step 2.4: Reasoning & Scoring Node.
@@ -383,6 +614,10 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
             "triggers": pet.get("triggers"),
             "bio_text": pet.get("bio_text"),
             "hypoallergenic": pet.get("hypoallergenic"),
+            # Present when this pet was only returned because a constraint was
+            # dropped to fill the candidate list (see retrieval.hybrid_search_pets).
+            "is_relaxed_match": pet.get("is_relaxed_match", False),
+            "relaxed_fields": pet.get("relaxed_fields", []),
             "shelter_name": pet.get("shelter_name"),
             "shelter_city": pet.get("shelter_city"),
             "adoption_fee": pet.get("adoption_fee"),
@@ -408,12 +643,26 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
         "4. Caveats: Provide 1 concise bullet point.\n"
         "5. Reasoning summary: 1 brief sentence.\n"
         "6. Comparison to #1 Hero Match: For candidate rank #1 (the Hero Pet), comparison_to_hero MUST be None. For all other candidate matches (rank #2 and lower), provide 1 clear, objective sentence in comparison_to_hero explaining specifically why they are not as perfect a match compared to the #1 Hero Pet (e.g., energy level differences, specific space/housing constraints, or behavioral needs).\n"
-        "7. Overall response: Warm, encouraging message presenting the #1 Hero Match to the adopter, and briefly summarizing the alternative matches explaining why each is not quite as perfect a fit compared to the hero pet."
+        "7. Overall response: Warm, encouraging message presenting the #1 Hero Match to the adopter, and briefly summarizing the alternative matches explaining why each is not quite as perfect a fit compared to the hero pet.\n"
+        "8. NEAR-MATCH DISCLOSURE: A candidate may carry \"is_relaxed_match\": true with \"relaxed_fields\" listing adopter preferences the search had to drop (for example housing_type or energy_budget). For such pets you MUST: (a) cap the score at 84, (b) name the relaxed preference as a caveat in plain language (e.g. \"your household profile differs on living space\"), and (c) NEVER describe the pet as fitting a preference that appears in relaxed_fields. Honesty about a near-match is mandatory."
     )
+
+    relaxed_pairs = [
+        (e.get("name"), e.get("relaxed_fields"))
+        for e in dossier_entries
+        if e.get("is_relaxed_match") and e.get("relaxed_fields")
+    ]
+    relaxed_note = ""
+    if relaxed_pairs:
+        relaxed_note = (
+            "\n\nNEAR-MATCH CANDIDATES (constraints relaxed to fill the list):\n"
+            + "\n".join(f"- {name}: relaxed {', '.join(fields)}" for name, fields in relaxed_pairs)
+        )
 
     human_prompt = (
         f"Adopter Lifestyle Constraints:\n{json.dumps(constraints, indent=2)}\n\n"
-        f"Candidate Shelter Pets Dossier:\n{json.dumps(dossier_entries, indent=2)}\n\n"
+        f"Candidate Shelter Pets Dossier:\n{json.dumps(dossier_entries, indent=2)}"
+        f"{relaxed_note}\n\n"
         "Generate grounded compatibility evaluations for each candidate and highlight the best match."
     )
 
@@ -427,6 +676,7 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
         ])
 
         evaluations_dict = [e.model_dump() for e in scoring_result.evaluations]
+        evaluations_dict = _apply_relaxed_match_disclosure(evaluations_dict, candidates)
         # Sort evaluations by compatibility score descending
         evaluations_dict.sort(key=lambda x: x["compatibility_score"], reverse=True)
 
@@ -467,6 +717,7 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
                 "reasoning_summary": f"{p.get('name')} is a wonderful {p.get('breed')} well-suited for your lifestyle."
             })
 
+        fallback_evals = _apply_relaxed_match_disclosure(fallback_evals, candidates)
         fallback_evals.sort(key=lambda x: x["compatibility_score"], reverse=True)
         top_name = fallback_evals[0]["pet_name"] if fallback_evals else "your match"
 
