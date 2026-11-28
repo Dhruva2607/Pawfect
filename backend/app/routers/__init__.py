@@ -7,6 +7,9 @@ from app.routers.pets import router as pets_router
 from app.routers.matches import router as matches_router
 from app.routers.adoptions import router as adoptions_router
 from app.routers.users import router as users_router
+from app.routers.meta import router as meta_router
+from app.routers.shelters import router as shelters_router
+from app.routers.notifications import router as notifications_router
 
 __all__ = [
     "chat_router",
@@ -14,4 +17,7 @@ __all__ = [
     "matches_router",
     "adoptions_router",
     "users_router",
+    "meta_router",
+    "shelters_router",
+    "notifications_router",
 ]

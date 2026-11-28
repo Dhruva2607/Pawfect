@@ -23,3 +23,8 @@ ALLOWED_ORIGINS: List[str] = [
     for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")
     if origin.strip()
 ]
+
+# JWT signing secret for shelter authentication (set JWT_SECRET in .env for production)
+JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-insecure-pawfect-jwt-secret-change-me")
+JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", str(60 * 24 * 7)))

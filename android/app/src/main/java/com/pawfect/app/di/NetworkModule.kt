@@ -2,6 +2,7 @@ package com.pawfect.app.di
 
 import com.pawfect.app.BuildConfig
 import com.pawfect.app.data.local.SessionManager
+import com.pawfect.app.data.local.ShelterSessionManager
 import com.pawfect.app.data.remote.PawFectApiService
 import com.pawfect.app.data.remote.PawFectSseClient
 import dagger.Module
@@ -46,7 +47,11 @@ object NetworkModule {
         coerceInputValues = true
     }
 
-    private fun buildClient(sessionManager: SessionManager, readTimeoutSeconds: Long): OkHttpClient {
+    private fun buildClient(
+        sessionManager: SessionManager,
+        shelterSessionManager: ShelterSessionManager,
+        readTimeoutSeconds: Long
+    ): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BASIC
@@ -57,7 +62,8 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .addInterceptor(logging)
             .addInterceptor { chain ->
-                val token = sessionManager.currentSession()?.token
+                val token = shelterSessionManager.currentSession()?.token
+                    ?: sessionManager.currentSession()?.token
                 val request = chain.request().newBuilder().apply {
                     if (!token.isNullOrBlank()) {
                         header("Authorization", "Bearer $token")
@@ -74,8 +80,11 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(sessionManager: SessionManager): OkHttpClient =
-        buildClient(sessionManager, readTimeoutSeconds = 60)
+    fun provideOkHttpClient(
+        sessionManager: SessionManager,
+        shelterSessionManager: ShelterSessionManager
+    ): OkHttpClient =
+        buildClient(sessionManager, shelterSessionManager, readTimeoutSeconds = 60)
 
     /**
      * Long-lived client for Server-Sent Events. A 0 read timeout disables it so
@@ -84,8 +93,11 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("SseClient")
-    fun provideSseOkHttpClient(sessionManager: SessionManager): OkHttpClient =
-        buildClient(sessionManager, readTimeoutSeconds = 0)
+    fun provideSseOkHttpClient(
+        sessionManager: SessionManager,
+        shelterSessionManager: ShelterSessionManager
+    ): OkHttpClient =
+        buildClient(sessionManager, shelterSessionManager, readTimeoutSeconds = 0)
 
     @Provides
     @Singleton

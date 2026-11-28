@@ -196,6 +196,14 @@ fun PetDetailScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            if (!pet.shelterName.isNullOrBlank()) {
+                                val citySuffix = pet.shelterCity?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+                                Text(
+                                    text = "Listed by ${pet.shelterName}$citySuffix",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
 
                         Surface(

@@ -150,17 +150,35 @@ fun AdoptionStepperScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
+                        val stage = uiState.applicationResult?.stageStatus?.lowercase()
+                        val headline = when (stage) {
+                            "rejected" -> "Application Not Selected"
+                            "adopt" -> "Adoption Approved!"
+                            "review" -> "Under Shelter Review"
+                            else -> "Application Submitted!"
+                        }
+                        val subtext = when (stage) {
+                            "rejected" -> uiState.applicationResult?.shelterNote
+                                ?: "This pet is no longer available or another match was selected."
+                            "adopt" -> uiState.applicationResult?.shelterNote
+                                ?: "Congratulations! The shelter has approved your adoption of ${uiState.pet?.name ?: "your match"}."
+                            "review" -> uiState.applicationResult?.shelterNote
+                                ?: "The shelter is actively reviewing your application for ${uiState.pet?.name ?: "your match"}."
+                            else -> "Your application for ${uiState.pet?.name ?: "your match"} has been received. You can check its current status here."
+                        }
+
                         Text(
-                            text = "Application Submitted!",
+                            text = headline,
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            color = if (stage == "rejected") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Your application for ${uiState.pet?.name ?: "your match"} has been received. You can check its current status here.",
+                            text = subtext,
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 
 from app.services.state import MatchmakerState, LifestyleConstraints
 from app.services.llm import get_chat_llm
-from app.services.retrieval import hybrid_search_pets
+from app.services.retrieval import get_newest_available_pets, hybrid_search_pets
+from app.services.matching_schema import get_chat_question_flow, get_intake_prompt_dimensions_block
 
 logger = logging.getLogger(__name__)
 
@@ -103,58 +104,7 @@ _SIGNUP_FIELD_KEYWORDS = {
     "energy_budget": ("energy", "activity level", "exercise", "daily routine", "active"),
 }
 
-_CHAT_QUESTION_FLOW = [
-    (
-        "species",
-        "Are you looking to adopt a dog or a cat?",
-        ["Looking for a Dog", "Looking for a Cat", "Open to either"],
-    ),
-    (
-        "preferred_age_group",
-        "What age group are you hoping to adopt?",
-        ["Puppy or Kitten", "Young (1-3 yrs)", "Adult (3-5 yrs)", "Senior (5+ yrs)", "Any age"],
-    ),
-    (
-        "preferred_size",
-        "What size pet would suit your home best?",
-        ["Small", "Medium", "Large", "Any size"],
-    ),
-    (
-        "grooming_tolerance",
-        "How much coat grooming and brushing are you comfortable with?",
-        ["Low maintenance", "Moderate brushing", "High grooming is fine"],
-    ),
-    (
-        "noise_tolerance",
-        "What noise level works best for your household and neighbors?",
-        ["Quiet (minimal barking/meowing)", "Moderate", "Vocal pets are fine"],
-    ),
-    (
-        "daily_alone_hours",
-        "Roughly how many hours a day would your pet spend alone?",
-        ["0-3 hours", "4-6 hours", "6+ hours"],
-    ),
-    (
-        "experience_level",
-        "Have you owned a pet before?",
-        ["First-time owner", "Experienced owner"],
-    ),
-    (
-        "housing_type",
-        "What kind of living space do you have?",
-        ["Apartment", "House with yard", "House without yard"],
-    ),
-    (
-        "energy_budget",
-        "What activity level fits your daily routine best?",
-        ["Calm & low energy", "Moderate daily walks", "High energy & active"],
-    ),
-    (
-        "has_children",
-        "Do you have any children or other pets at home?",
-        ["No children or pets", "Have young children", "Have other pets", "Have children & pets"],
-    ),
-]
+_CHAT_QUESTION_FLOW = get_chat_question_flow()
 
 
 def _next_missing_question(constraints: Dict[str, Any]) -> tuple[str, List[str]]:
@@ -192,6 +142,20 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
 
     logger.info("Executing Conversational Intake Node. User message: '%s'", user_msg)
 
+    # Fast-path for "New arrivals / just listed" requests
+    msg_lower = (user_msg or "").lower()
+    if "new arrival" in msg_lower or "just listed" in msg_lower or "newest" in msg_lower:
+        updated_constraints = _apply_species_override(dict(prior_constraints), user_msg)
+        updated_constraints["sort_by"] = "newest"
+        return {
+            "extracted_constraints": updated_constraints,
+            "is_complete": True,
+            "search_queries": ["newly listed available pets"],
+            "response_message": "Let me pull up the newest arrivals from our partner shelters for you!",
+            "quick_replies": [],
+            "next_node": "hybrid_retrieval",
+        }
+
     # Format dialogue history
     dialogue_snippets = []
     for turn in history[-6:]:  # Keep recent context
@@ -221,14 +185,7 @@ def conversational_intake_node(state: MatchmakerState) -> Dict[str, Any]:
         "- When requesting more information, ask EXACTLY ONE focused question at a time. NEVER combine multiple questions into one message.\n"
         "- Provide 2 to 4 concise suggested_quick_replies that DIRECTLY and FULLY answer that ONE question.\n"
         "- Focus on gathering the missing pet & lifestyle preferences not set during sign-up:\n"
-        "  1. species: Dog, Cat, or either ('dog', 'cat', 'any') -> ['Looking for a Dog', 'Looking for a Cat', 'Open to either']\n"
-        "  2. preferred_age_group: 'puppy_or_kitten', 'young', 'adult', 'senior', or 'any' -> ['Puppy or Kitten', 'Young (1-3 yrs)', 'Adult (3-5 yrs)', 'Senior (5+ yrs)', 'Any age']\n"
-        "  3. preferred_size: 'small', 'medium', 'large', or 'any' -> ['Small', 'Medium', 'Large', 'Any size']\n"
-        "  4. grooming_tolerance: 'low', 'moderate', 'high', or 'any' -> ['Low maintenance', 'Moderate brushing', 'High grooming is fine']\n"
-        "  5. noise_tolerance: 'quiet', 'moderate', 'vocal', or 'any' -> ['Quiet (minimal barking/meowing)', 'Moderate', 'Vocal pets are fine']\n"
-        "  6. daily_alone_hours: integer hours alone per day -> ['0-3 hours', '4-6 hours', '6+ hours']\n"
-        "  7. experience_level: 'first_time' or 'experienced' -> ['First-time owner', 'Experienced owner']\n"
-        "  8. allergies: boolean (low-shedding need) -> ['No allergies', 'Yes, need low-shedding']\n"
+        f"{get_intake_prompt_dimensions_block()}\n"
         "  (Only ask housing_type, energy_budget, has_children, or has_other_pets if they are missing from Prior Extracted Constraints.)\n\n"
         "INSTRUCTIONS:\n"
         "- Merge all previously extracted constraints with any newly shared facts in the conversation.\n"
@@ -338,6 +295,13 @@ def hybrid_retrieval_node(state: MatchmakerState) -> Dict[str, Any]:
 
     logger.info("Executing Hybrid Retrieval Node for query: '%s'", query_text)
 
+    if constraints.get("sort_by") == "newest":
+        candidates = get_newest_available_pets(constraints=constraints, top_k=5)
+        return {
+            "candidate_matches": candidates,
+            "next_node": "reasoning_scoring",
+        }
+
     species = (constraints.get("species") or "").lower()
     if species in ("dog", "cat"):
         candidates = hybrid_search_pets(
@@ -417,7 +381,18 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
             "exercise_needs": pet.get("exercise_needs"),
             "quirks": pet.get("quirks"),
             "triggers": pet.get("triggers"),
-            "bio_text": pet.get("bio_text")
+            "bio_text": pet.get("bio_text"),
+            "hypoallergenic": pet.get("hypoallergenic"),
+            "shelter_name": pet.get("shelter_name"),
+            "shelter_city": pet.get("shelter_city"),
+            "adoption_fee": pet.get("adoption_fee"),
+            "vaccinated": pet.get("vaccinated"),
+            "neutered": pet.get("neutered"),
+            "microchipped": pet.get("microchipped"),
+            "requires_yard": pet.get("requires_yard"),
+            "min_experience": pet.get("min_experience"),
+            "not_suitable_for_young_children": pet.get("not_suitable_for_young_children"),
+            "ideal_adopter_notes": pet.get("ideal_adopter_notes"),
         })
 
     system_prompt = (
@@ -468,7 +443,7 @@ def reasoning_scoring_node(state: MatchmakerState) -> Dict[str, Any]:
         return {
             "evaluations": evaluations_dict,
             "response_message": scoring_result.overall_response,
-            "quick_replies": [f"Learn more about {top_match_name}", "See alternative matches", "Start Adoption Application"]
+            "quick_replies": [f"Learn more about {top_match_name}", "See alternative matches", "Show new arrivals", "Start Adoption Application"]
         }
 
     except Exception as e:

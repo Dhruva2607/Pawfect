@@ -59,7 +59,7 @@ class AdoptionViewModel @Inject constructor(
                             applicantEmail = session.email,
                             applicationResult = existingApp,
                             isSubmitted = true,
-                            currentStep = AdoptionStep.APPLY,
+                            currentStep = mapStageToStep(existingApp.stageStatus),
                             error = null
                         )
                     }
@@ -96,6 +96,7 @@ class AdoptionViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         applicationResult = response,
+                        currentStep = mapStageToStep(response.stageStatus),
                         isRefreshingStatus = false,
                         error = null
                     )
@@ -179,5 +180,12 @@ class AdoptionViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun mapStageToStep(stageStatus: String?): AdoptionStep = when (stageStatus?.lowercase()) {
+        "match" -> AdoptionStep.MATCH
+        "review" -> AdoptionStep.REVIEW
+        "adopt" -> AdoptionStep.APPLY
+        else -> AdoptionStep.APPLY
     }
 }

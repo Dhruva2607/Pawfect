@@ -41,6 +41,9 @@ def build_mql_prefilter(constraints: Dict[str, Any]) -> Dict[str, Any]:
     """
     query: Dict[str, Any] = {}
 
+    # Hard filter: only available pets are returned to adopters
+    query["status"] = "available"
+
     # Species filter
     species = constraints.get("species")
     if species and species.lower() in ["dog", "cat"]:
@@ -54,18 +57,22 @@ def build_mql_prefilter(constraints: Dict[str, Any]) -> Dict[str, Any]:
     if constraints.get("has_other_pets") is True:
         query["good_with_other_pets"] = True
 
-    # Housing requirement filter
+    # Housing requirement filter — normalized per matching_schema.py
+    # house_without_yard is treated like apartment (no yard access)
     housing = constraints.get("housing_type")
     if housing:
         housing_clean = housing.lower().replace(" ", "_")
         if "apartment_or_house" in housing_clean:
-            # "Either is fine" - no housing restriction
+            # "Either is fine" — no housing restriction
             pass
+        elif housing_clean == "house_without_yard":
+            # House WITHOUT yard → same filter as apartment (no yard pets)
+            query["housing_requirement"] = {"$in": ["apartment", "apartment_or_house"]}
+        elif housing_clean == "house_with_yard":
+            # House WITH yard → can take apartment_or_house or house_with_yard
+            query["housing_requirement"] = {"$in": ["apartment_or_house", "house_with_yard"]}
         elif "apartment" in housing_clean:
             query["housing_requirement"] = {"$in": ["apartment", "apartment_or_house"]}
-        elif "yard" in housing_clean:
-            # Houses with yard can take apartment_or_house or house_with_yard
-            query["housing_requirement"] = {"$in": ["apartment_or_house", "house_with_yard"]}
 
     # Energy compatibility: allow at most one level above the adopter's budget
     energy_budget = constraints.get("energy_budget")
@@ -100,10 +107,11 @@ def build_mql_prefilter(constraints: Dict[str, Any]) -> Dict[str, Any]:
         elif noise_clean == "moderate":
             query["noise_level"] = {"$in": ["quiet", "moderate"]}
 
-    # Daily alone hours filter
+    # Daily alone hours filter — mapped per matching_schema.py
+    # 0-3 h → low, 4-5 h → moderate, 6+ h → high
     alone_hours = constraints.get("daily_alone_hours")
     if isinstance(alone_hours, int):
-        if alone_hours >= 7:
+        if alone_hours >= 6:
             query["alone_time_tolerance"] = "high"
         elif alone_hours >= 4:
             query["alone_time_tolerance"] = {"$in": ["moderate", "high"]}
@@ -113,14 +121,12 @@ def build_mql_prefilter(constraints: Dict[str, Any]) -> Dict[str, Any]:
     if experience and experience.lower() == "first_time":
         query["experience_level_required"] = "first_time_friendly"
 
-    # Hypoallergenic filter if allergies are flagged
+    # Hypoallergenic / allergy filter — no more regex on bio/temperament
+    # Uses the structured hypoallergenic bool field + shedding_level == "low"
     if constraints.get("allergies") is True:
         query["$or"] = [
             {"shedding_level": "low"},
-            {"temperament": {"$regex": "hypoallergenic", "$options": "i"}},
-            {"temperament": {"$regex": "low shedding", "$options": "i"}},
-            {"bio_text": {"$regex": "hypoallergenic", "$options": "i"}},
-            {"bio_text": {"$regex": "allergy", "$options": "i"}},
+            {"hypoallergenic": True},
         ]
 
     return query
@@ -187,6 +193,18 @@ def _run_vector_or_cosine_search(
                         "exercise_needs": 1,
                         "triggers": 1,
                         "photo_url": 1,
+                        "hypoallergenic": 1,
+                        "status": 1,
+                        "shelter_id": 1,
+                        "listed_at": 1,
+                        "adoption_fee": 1,
+                        "vaccinated": 1,
+                        "neutered": 1,
+                        "microchipped": 1,
+                        "requires_yard": 1,
+                        "min_experience": 1,
+                        "not_suitable_for_young_children": 1,
+                        "ideal_adopter_notes": 1,
                         "score": {"$meta": "vectorSearchScore"}
                     }
                 }
@@ -281,4 +299,56 @@ def hybrid_search_pets(
                     if len(results) >= top_k:
                         break
 
-    return results[:top_k]
+    return _attach_shelter_metadata(results[:top_k], db)
+
+
+def _attach_shelter_metadata(pets: List[Dict[str, Any]], db: Database) -> List[Dict[str, Any]]:
+    """Enrich candidate pet dicts with shelter_name & shelter_city if shelters collection exists."""
+    shelter_ids = list({p.get("shelter_id") for p in pets if p.get("shelter_id")})
+    if not shelter_ids:
+        return pets
+    try:
+        shelters_col = db["shelters"]
+        docs = list(shelters_col.find({"_id": {"$in": shelter_ids}}, {"name": 1, "city": 1}))
+    except (KeyError, TypeError, AttributeError):
+        return pets
+
+    smap = {d["_id"]: d for d in docs if "_id" in d}
+    for p in pets:
+        sid = p.get("shelter_id")
+        if sid and sid in smap:
+            p["shelter_name"] = smap[sid].get("name")
+            p["shelter_city"] = smap[sid].get("city")
+    return pets
+
+
+def get_newest_available_pets(
+    constraints: Dict[str, Any],
+    top_k: int = 5,
+    db: Optional[Database] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve the most recently listed available pets matching core safety/species filters,
+    sorted by listed_at descending. Used by the 'New arrivals / just listed' chat path.
+    """
+    if db is None:
+        db = get_sync_db()
+
+    pets_col = db["pets"]
+    core_constraints = {
+        k: v for k, v in constraints.items()
+        if k in ("species", "has_children", "has_other_pets", "allergies")
+    }
+    mql_filter = build_mql_prefilter(core_constraints)
+    candidates = list(pets_col.find(mql_filter))
+    candidates.sort(
+        key=lambda p: str(p.get("listed_at") or p.get("updated_at") or ""),
+        reverse=True,
+    )
+    cleaned: List[Dict[str, Any]] = []
+    for pet in candidates[:top_k]:
+        p = dict(pet)
+        p.pop("embedding", None)
+        p.setdefault("score", 0.9)
+        cleaned.append(p)
+    return _attach_shelter_metadata(cleaned, db)

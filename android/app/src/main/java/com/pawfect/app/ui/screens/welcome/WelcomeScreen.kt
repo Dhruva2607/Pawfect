@@ -52,7 +52,8 @@ private const val WelcomePetImage =
 fun WelcomeScreen(
     onGetStarted: () -> Unit,
     onSignUp: () -> Unit,
-    onLogin: () -> Unit
+    onLogin: () -> Unit,
+    onShelterAccess: () -> Unit = {}
 ) {
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
@@ -142,6 +143,12 @@ fun WelcomeScreen(
                     TextButton(onClick = onSignUp) { Text("Create account") }
                     Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     TextButton(onClick = onLogin) { Text("Log in") }
+                }
+                TextButton(
+                    onClick = onShelterAccess,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("I'm an Adoption Center / Shelter →")
                 }
             }
         }

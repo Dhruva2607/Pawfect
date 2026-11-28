@@ -160,8 +160,14 @@ The app uses live API responses; it does not bundle a fallback pet catalog. Chat
 | `GET` / `PUT` | `/api/v1/users/{id}/profile` | Read/update a profile |
 | `POST` | `/api/v1/users/{id}/favorite/{petId}` | Toggle a saved pet |
 | `GET` | `/api/v1/users/{id}/saved-pets` | List saved pets |
-| `POST` | `/api/v1/adoptions/apply` | Submit an adoption application |
-| `GET` | `/api/v1/adoptions/{id}/status` | Read application status |
+| `POST` | `/api/v1/adoptions/apply` | Submit an adoption application (computes compatibility & notifies shelter) |
+| `GET` | `/api/v1/adoptions/{id}/status` | Read application status & stage history |
+| `GET` | `/api/v1/meta/pet-options` | Single-source-of-truth matching dimensions & UI options |
+| `POST` | `/api/v1/shelters/auth/signup` / `login` | Shelter registration & bcrypt+JWT login |
+| `GET` / `PUT` | `/api/v1/shelters/me` | Authenticated shelter profile |
+| `POST` / `GET` / `PUT` / `PATCH` / `DELETE` | `/api/v1/shelters/me/pets` | Owner-only shelter pet CRUD, photo upload, embedding retry |
+| `GET` / `PATCH` | `/api/v1/shelters/me/applications` | Shelter application inbox, stage transitions & dashboard stats (`/stats`) |
+| `GET` / `PATCH` / `POST` | `/api/v1/notifications` | Shelter & adopter notifications + `/stream` SSE |
 
 Interactive request/response schemas are available at `/docs`. The current authentication implementation is not production authentication: passwords are not validated, login can create a profile, and the returned token is synthetic. Do not use it to protect real user data without implementing proper authentication and authorization.
 

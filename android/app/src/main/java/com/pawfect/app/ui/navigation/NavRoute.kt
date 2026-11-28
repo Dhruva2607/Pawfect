@@ -2,13 +2,19 @@ package com.pawfect.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Pets
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -53,6 +59,23 @@ sealed class NavRoute(val route: String) {
 
     // Screen 8: User Profile Hub
     object Profile : NavRoute("profile")
+
+    // Shelter (Adoption Center) Flow
+    object ShelterAuth : NavRoute("shelter_auth/{mode}") {
+        fun createRoute(signUp: Boolean) = "shelter_auth/${if (signUp) "signup" else "login"}"
+    }
+    object ShelterDashboard : NavRoute("shelter_dashboard")
+    object ShelterPets : NavRoute("shelter_pets")
+    object ShelterPetForm : NavRoute("shelter_pet_form?petId={petId}") {
+        fun createRoute(petId: String? = null) =
+            if (petId.isNullOrBlank()) "shelter_pet_form" else "shelter_pet_form?petId=$petId"
+    }
+    object ShelterApplications : NavRoute("shelter_applications")
+    object ShelterApplicationDetail : NavRoute("shelter_application_detail/{appId}") {
+        fun createRoute(appId: String) = "shelter_application_detail/$appId"
+    }
+    object ShelterNotifications : NavRoute("shelter_notifications")
+    object ShelterProfile : NavRoute("shelter_profile")
 }
 
 /**
@@ -89,6 +112,34 @@ sealed class BottomNavItem(
     object Profile : BottomNavItem(
         route = NavRoute.Profile.route,
         title = "Profile",
+        selectedIcon = Icons.Filled.Person,
+        unselectedIcon = Icons.Outlined.Person
+    )
+
+    object ShelterDashboard : BottomNavItem(
+        route = NavRoute.ShelterDashboard.route,
+        title = "Dashboard",
+        selectedIcon = Icons.Filled.Dashboard,
+        unselectedIcon = Icons.Outlined.Dashboard
+    )
+
+    object ShelterPets : BottomNavItem(
+        route = NavRoute.ShelterPets.route,
+        title = "My Pets",
+        selectedIcon = Icons.Filled.Pets,
+        unselectedIcon = Icons.Outlined.Pets
+    )
+
+    object ShelterApplications : BottomNavItem(
+        route = NavRoute.ShelterApplications.route,
+        title = "Inbox",
+        selectedIcon = Icons.Filled.Inbox,
+        unselectedIcon = Icons.Outlined.Inbox
+    )
+
+    object ShelterProfile : BottomNavItem(
+        route = NavRoute.ShelterProfile.route,
+        title = "Center",
         selectedIcon = Icons.Filled.Person,
         unselectedIcon = Icons.Outlined.Person
     )

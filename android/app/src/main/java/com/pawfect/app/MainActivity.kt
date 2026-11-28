@@ -11,6 +11,7 @@ import com.pawfect.app.ui.navigation.PawFectMainScaffold
 import com.pawfect.app.ui.theme.PawFectTheme
 import dagger.hilt.android.AndroidEntryPoint
 import com.pawfect.app.data.local.SessionManager
+import com.pawfect.app.data.local.ShelterSessionManager
 import javax.inject.Inject
 
 /**
@@ -22,6 +23,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var sessionManager: SessionManager
 
+    @Inject
+    lateinit var shelterSessionManager: ShelterSessionManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -32,7 +36,9 @@ class MainActivity : ComponentActivity() {
                 ) {
                     PawFectMainScaffold(
                         isAuthenticated = sessionManager.currentSession() != null,
-                        onLogout = sessionManager::logout
+                        isShelterAuthenticated = shelterSessionManager.currentSession() != null,
+                        onLogout = sessionManager::logout,
+                        onShelterLogout = shelterSessionManager::logout
                     )
                 }
             }

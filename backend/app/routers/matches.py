@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from app.database.connection import get_async_db
 from app.models.match_evaluation import MatchEvaluation
 from app.models.pet import Pet
+from app.services.compatibility import compute_heuristic_compatibility
 from app.services.llm import get_chat_llm
 from app.services.nodes import SinglePetCompatibility
 
@@ -140,24 +141,7 @@ async def direct_eval(request: DirectEvalRequest):
         ])
     except Exception as e:
         logger.error("Direct evaluation LLM error: %s. Using heuristic fallback.", e)
-        # Fallback scoring
-        score = 80
-        if request.has_children and not pet.good_with_kids:
-            score -= 30
-        if request.has_other_pets and not pet.good_with_other_pets:
-            score -= 30
-        if request.housing_type == "apartment" and pet.housing_requirement == "house_with_yard":
-            score -= 25
-
-        score = max(40, min(95, score))
-        eval_result = SinglePetCompatibility(
-            pet_id=pet.id,
-            pet_name=pet.name,
-            compatibility_score=score,
-            pros=[f"Matches housing requirement ({pet.housing_requirement})"],
-            caveats=[f"Exercise requirement: {pet.exercise_needs or 'Moderate'}"],
-            reasoning_summary=f"{pet.name} is a wonderful {pet.breed} to consider for your home."
-        )
+        eval_result = compute_heuristic_compatibility(pet, lifestyle)
 
     comparison_to_hero = eval_result.comparison_to_hero
     if not comparison_to_hero and hasattr(db["match_evaluations"], "find_one"):

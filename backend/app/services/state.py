@@ -14,7 +14,7 @@ class LifestyleConstraints(BaseModel):
     [FROM MARKDOWN: Step 2.1 & Step 2.2]
     """
     species: Optional[str] = Field(None, description="Preferred species: 'dog', 'cat', or 'any'")
-    housing_type: Optional[str] = Field(None, description="'apartment', 'house_with_yard', or 'apartment_or_house'")
+    housing_type: Optional[str] = Field(None, description="'apartment', 'house_with_yard', 'house_without_yard', or 'apartment_or_house'")
     has_children: Optional[bool] = Field(None, description="Whether children live in the household")
     has_other_pets: Optional[bool] = Field(None, description="Whether other resident pets live in the household")
     energy_budget: Optional[int] = Field(None, ge=1, le=5, description="Adopter energy budget / activity level (1 to 5)")

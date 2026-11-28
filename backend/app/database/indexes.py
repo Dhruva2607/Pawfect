@@ -74,6 +74,18 @@ ATLAS_VECTOR_SEARCH_INDEX_DEFINITION: Dict[str, Any] = {
             {
                 "type": "filter",
                 "path": "experience_level_required"
+            },
+            {
+                "type": "filter",
+                "path": "hypoallergenic"
+            },
+            {
+                "type": "filter",
+                "path": "status"
+            },
+            {
+                "type": "filter",
+                "path": "shelter_id"
             }
         ]
     }
@@ -103,7 +115,23 @@ def setup_standard_indexes(db: Database | None = None) -> Dict[str, list]:
         [("species", ASCENDING), ("energy_level", ASCENDING), ("good_with_kids", ASCENDING)],
         name="idx_species_energy_kids"
     )
-    created_indexes["pets"] = [idx_species, idx_energy, idx_kids, idx_compound]
+    idx_pet_shelter = pets_col.create_index([("shelter_id", ASCENDING)], name="idx_pet_shelter_id")
+    idx_pet_status = pets_col.create_index([("status", ASCENDING)], name="idx_pet_status")
+    idx_pet_updated = pets_col.create_index([("updated_at", ASCENDING)], name="idx_pet_updated_at")
+    idx_pet_shelter_status = pets_col.create_index(
+        [("shelter_id", ASCENDING), ("status", ASCENDING)],
+        name="idx_pet_shelter_status",
+    )
+    created_indexes["pets"] = [
+        idx_species, idx_energy, idx_kids, idx_compound,
+        idx_pet_shelter, idx_pet_status, idx_pet_updated, idx_pet_shelter_status,
+    ]
+
+    # Shelters collection indexes
+    shelters_col = db["shelters"]
+    idx_shelter_email = shelters_col.create_index([("email", ASCENDING)], unique=True, name="idx_shelter_email")
+    idx_shelter_city = shelters_col.create_index([("city", ASCENDING)], name="idx_shelter_city")
+    created_indexes["shelters"] = [idx_shelter_email, idx_shelter_city]
 
     # Adoption applications indexes
     adoptions_col = db["adoption_applications"]
@@ -114,7 +142,23 @@ def setup_standard_indexes(db: Database | None = None) -> Dict[str, list]:
         [("user_id", ASCENDING), ("pet_id", ASCENDING)],
         name="idx_app_user_pet"
     )
-    created_indexes["adoption_applications"] = [idx_user, idx_pet, idx_stage, idx_user_pet]
+    idx_app_shelter = adoptions_col.create_index([("shelter_id", ASCENDING)], name="idx_app_shelter_id")
+    idx_app_shelter_stage = adoptions_col.create_index(
+        [("shelter_id", ASCENDING), ("stage_status", ASCENDING)],
+        name="idx_app_shelter_stage",
+    )
+    created_indexes["adoption_applications"] = [
+        idx_user, idx_pet, idx_stage, idx_user_pet, idx_app_shelter, idx_app_shelter_stage
+    ]
+
+    # Notifications indexes
+    notifs_col = db["notifications"]
+    idx_notif_recipient = notifs_col.create_index(
+        [("recipient_role", ASCENDING), ("recipient_id", ASCENDING), ("read", ASCENDING)],
+        name="idx_notif_recipient_read",
+    )
+    idx_notif_created = notifs_col.create_index([("created_at", ASCENDING)], name="idx_notif_created_at")
+    created_indexes["notifications"] = [idx_notif_recipient, idx_notif_created]
 
     # User profiles indexes
     profiles_col = db["user_profiles"]

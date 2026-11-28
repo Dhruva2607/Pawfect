@@ -36,6 +36,22 @@ data class PetDto(
     @SerialName("exercise_needs") val exerciseNeeds: String? = null,
     val triggers: List<String> = emptyList(),
     @SerialName("photo_url") val photoUrl: String? = null,
+    @SerialName("shelter_id") val shelterId: String? = null,
+    @SerialName("shelter_name") val shelterName: String? = null,
+    @SerialName("shelter_city") val shelterCity: String? = null,
+    val status: String? = null,
+    val hypoallergenic: Boolean = false,
+    @SerialName("embedding_pending") val embeddingPending: Boolean = false,
+    val vaccinated: Boolean? = null,
+    val neutered: Boolean? = null,
+    val microchipped: Boolean? = null,
+    @SerialName("adoption_fee") val adoptionFee: Double? = null,
+    @SerialName("requires_yard") val requiresYard: Boolean? = null,
+    @SerialName("min_experience") val minExperience: String? = null,
+    @SerialName("not_suitable_for_young_children") val notSuitableForYoungChildren: Boolean? = null,
+    @SerialName("ideal_adopter_notes") val idealAdopterNotes: String? = null,
+    @SerialName("listed_at") val listedAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
     val score: Double? = null
 )
 

@@ -102,7 +102,7 @@ def test_retrieval_never_drops_required_constraints_when_no_candidates(monkeypat
     )
 
     assert result == []
-    assert collection.find_queries == [{"species": "dog", "good_with_kids": True}]
+    assert collection.find_queries == [{"status": "available", "species": "dog", "good_with_kids": True}]
 
 
 def test_allergy_search_skips_vector_filter_and_keeps_all_constraints(monkeypatch):
@@ -204,7 +204,7 @@ def test_http_health_routes_and_pet_catalog(monkeypatch):
     assert pets.status_code == 200
     assert pets.json()[0]["_id"] == "pet-1"
     assert "embedding" not in pets.json()[0]
-    assert collection.query == {"species": "dog"}
+    assert collection.query == {"status": "available", "species": "dog"}
     assert unavailable.status_code == 503
     assert unavailable.json()["database"] == "unavailable"
 
@@ -648,6 +648,7 @@ def test_hybrid_search_fills_alternative_matches_when_only_one_exact_match(monke
             "_id": "pet_exact",
             "name": "Milo",
             "species": "dog",
+            "status": "available",
             "size": "small",
             "age_group": "adult",
             "grooming_needs": "low",
@@ -661,6 +662,7 @@ def test_hybrid_search_fills_alternative_matches_when_only_one_exact_match(monke
             "_id": "pet_alt_1",
             "name": "Waffles",
             "species": "dog",
+            "status": "available",
             "size": "small",
             "age_group": "young",
             "grooming_needs": "low",
@@ -674,6 +676,7 @@ def test_hybrid_search_fills_alternative_matches_when_only_one_exact_match(monke
             "_id": "pet_alt_2",
             "name": "Daisy",
             "species": "dog",
+            "status": "available",
             "size": "small",
             "age_group": "young",
             "grooming_needs": "moderate",

@@ -279,3 +279,62 @@ If a request fails, inspect the Android app state/error text, the Uvicorn consol
 - Catalog and other app features use backend data; there is no client-side sample-pet fallback.
 - API/manual smoke tests need real services and may incur Gemini usage. Unit tests use test doubles and do not replace these checks.
 - Release cleartext traffic is disabled and the generated release APK is unsigned.
+
+## 9. Adoption Center (Shelter) Side & Matching Schema
+
+- **Single Source of Truth:** `backend/app/services/matching_schema.py` defines all matchable dimensions, allowed values, display labels, `compute_age_group`, and `map_alone_hours_to_tolerance`, exposed via `GET /api/v1/meta/pet-options`.
+- **Shelter Auth:** `POST /api/v1/shelters/auth/signup` and `/login` hash passwords with `bcrypt` and issue signed JWTs (`role="shelter"`, `shelter_id`) using `JWT_SECRET` (see `backend/.env.example`).
+- **Idempotent Migration:** Run `python -m app.scripts.migrate_shelters` from `backend/` to create the default `"PawFect Partner Shelter"` and backfill `shelter_id`, `status="available"`, `hypoallergenic`, and timestamps onto existing seeded pets without wiping data.
+- **Atlas Vector Search Index:** `ATLAS_VECTOR_SEARCH_INDEX_DEFINITION` in `backend/app/database/indexes.py` includes `status`, `shelter_id`, and `hypoallergenic` as filter fields; `setup_atlas_vector_search_index` automatically updates the index on startup when Atlas Search APIs are available.
+
+## 10. Demo Data (`seed_demo_data.py`)
+
+### Commands (run from `backend/`)
+```powershell
+# Preview counts and run integrity checks without writing
+.\.venv\Scripts\python.exe -m app.scripts.seed_demo_data --dry-run
+
+# Seed demo data (with Gemini 768-dim embeddings)
+.\.venv\Scripts\python.exe -m app.scripts.seed_demo_data --yes
+
+# Seed without Gemini API calls (marks new pets embedding_pending=True)
+.\.venv\Scripts\python.exe -m app.scripts.seed_demo_data --skip-embeddings --yes
+
+# Delete ONLY seed_source="demo_v1" docs and re-seed
+.\.venv\Scripts\python.exe -m app.scripts.seed_demo_data --reset-demo --yes
+
+# Exercise live API sync end-to-end against running backend
+.\.venv\Scripts\python.exe -m app.scripts.seed_demo_data --live-sync-check
+```
+
+### Demo Shelter Logins (password for all: `DemoShelter2026!`)
+| ID | Name | Email | Focus |
+|---|---|---|---|
+| `shelter_demo_01` | Indiranagar Paws & Whiskers | `indiranagar.paws@example.com` | Busiest city shelter (26+ pets, 20+ apps, unread badges) |
+| `shelter_demo_02` | Koramangala Whisker Haven | `koramangala.whiskers@example.com` | Cat-focused rescue |
+| `shelter_demo_03` | Kanakapura Open Meadows Sanctuary | `kanakapura.meadows@example.com` | Rural big-yard working dogs |
+| `shelter_demo_04` | Jayanagar Silver Paws Sanctuary | `jayanagar.silverpaws@example.com` | Senior & special-needs sanctuary |
+| `shelter_demo_05` | HSR Puppy & Kitten Foster Network | `hsr.fosters@example.com` | Puppies & kittens (<12 mo) |
+| `shelter_demo_06` | Malleshwaram Toy & Small Breed Rescue | `malleshwaram.smallpaws@example.com` | Small & hypoallergenic breeds |
+| `shelter_demo_07` | Whitefield Community Pet Center | `whitefield.community@example.com` | Family-friendly balanced mix |
+| `shelter_demo_08` | Electronic City New Hope Rescue | `ecity.newhope@example.com` | Unverified (`verified=false`), 3 pets, empty inbox |
+
+### Key Demo Adopter Logins (use any `@example.com` email; demo auth derives `user_id` from email)
+- **Flagship Adopter:** `aarav.flagship@example.com` (Aarav Nair) — saved pets (including 1 stale `adopted` pet), completed chat session + top-3 evaluations, applications at all 4 stages (`apply`, `review`, `adopt`, `rejected`), and read + unread notifications.
+- `meera.single.apt@example.com` — single apartment dweller, low energy
+- `deshmukh.youngkids@example.com` — family with young children & yard
+- `iyer.teenagers@example.com` — family with teenagers
+- `rao.retired@example.com` — retired couple seeking senior small dog
+- `priya.allergy@example.com` — allergy-sensitive household (`allergies=True`)
+- `vikram.runner@example.com` — very active runner (`energy_budget=5`)
+- `nandini.longhours@example.com` — away 8+ hours/day
+- `pranav.gokhale@example.com` — niche fallback tester (`senior + large + quiet + apartment`)
+
+### Manual Test Checklist
+1. **Flagship Matches:** Log in as `aarav.flagship@example.com`, open Matches/Chat to see 3 ranked matches with a hero comparison.
+2. **Busiest Shelter Inbox & Pagination:** Log in as `indiranagar.paws@example.com`, verify the unread notification badge, open the newest notification to land on that application, and scroll the pet list & inbox.
+3. **Live Stage Sync:** Move an application from `apply` → `review` → `adopt` as the shelter and refresh the adopter's Adoption Stepper to see the stage & `shelter_note`.
+4. **Empty Inbox State:** Log in as `ecity.newhope@example.com` to verify the empty application inbox state.
+5. **New Arrivals:** Chat as `deshmukh.youngkids@example.com` and tap `"Show new arrivals"` to see pets listed in the last 3 days.
+6. **Relaxed-Filter Fallback:** Search/chat with `senior + large + quiet + apartment` (`pranav.gokhale@example.com`) to exercise the relaxed-filter fallback.
+7. **Stale Saved Pet:** Open `aarav.flagship@example.com`'s Saved Pets list to verify the adopted saved pet renders cleanly without crashing.

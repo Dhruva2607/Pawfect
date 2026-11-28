@@ -22,11 +22,11 @@ import com.pawfect.app.ui.screens.home.HomeScreen
 import com.pawfect.app.ui.screens.onboarding.OnboardingScreen
 import com.pawfect.app.ui.screens.petdetail.PetDetailScreen
 import com.pawfect.app.ui.screens.profile.ProfileScreen
+import com.pawfect.app.ui.screens.shelter.*
 import com.pawfect.app.ui.screens.welcome.WelcomeScreen
 
 /**
- * Complete 8-screen navigation graph for PawFect.
- * [FROM MARKDOWN: Section 2, Step 4.2, and Phase 5]
+ * Complete navigation graph for PawFect (Adopter + Shelter flows).
  */
 @Composable
 fun PawFectNavGraph(
@@ -34,7 +34,9 @@ fun PawFectNavGraph(
     modifier: Modifier = Modifier,
     startDestination: String = NavRoute.Welcome.route,
     onAuthenticated: () -> Unit,
-    onLogout: () -> Unit
+    onShelterAuthenticated: () -> Unit = {},
+    onLogout: () -> Unit,
+    onShelterLogout: () -> Unit = {}
 ) {
     NavHost(
         navController = navController,
@@ -66,7 +68,8 @@ fun PawFectNavGraph(
             WelcomeScreen(
                 onGetStarted = { navController.navigate(NavRoute.Onboarding.route) },
                 onSignUp = { navController.navigate(NavRoute.Auth.createRoute(true)) },
-                onLogin = { navController.navigate(NavRoute.Auth.createRoute(false)) }
+                onLogin = { navController.navigate(NavRoute.Auth.createRoute(false)) },
+                onShelterAccess = { navController.navigate(NavRoute.ShelterAuth.createRoute(false)) }
             )
         }
 
@@ -215,6 +218,86 @@ fun PawFectNavGraph(
                 onNavigateToChatHistory = { navController.navigate(NavRoute.Chat.route) },
                 onLogout = onLogout
             )
+        }
+
+        // ── Shelter (Adoption Center) Flow ────────────────────────────
+        composable(
+            route = NavRoute.ShelterAuth.route,
+            arguments = listOf(navArgument("mode") { type = NavType.StringType })
+        ) { backStackEntry ->
+            ShelterAuthScreen(
+                initialSignUp = backStackEntry.arguments?.getString("mode") == "signup",
+                onBack = { navController.popBackStack() },
+                onAuthenticated = {
+                    onShelterAuthenticated()
+                    navController.navigate(NavRoute.ShelterDashboard.route) {
+                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        composable(NavRoute.ShelterDashboard.route) {
+            ShelterDashboardScreen(
+                onAddPet = { navController.navigate(NavRoute.ShelterPetForm.createRoute(null)) },
+                onOpenNotifications = { navController.navigate(NavRoute.ShelterNotifications.route) },
+                onOpenApplications = { navController.navigate(NavRoute.ShelterApplications.route) },
+                onOpenApplicationDetail = { appId ->
+                    navController.navigate(NavRoute.ShelterApplicationDetail.createRoute(appId))
+                }
+            )
+        }
+
+        composable(NavRoute.ShelterPets.route) {
+            ShelterPetsScreen(
+                onAddPet = { navController.navigate(NavRoute.ShelterPetForm.createRoute(null)) },
+                onEditPet = { petId -> navController.navigate(NavRoute.ShelterPetForm.createRoute(petId)) }
+            )
+        }
+
+        composable(
+            route = NavRoute.ShelterPetForm.route,
+            arguments = listOf(navArgument("petId") { type = NavType.StringType; nullable = true; defaultValue = null })
+        ) { backStackEntry ->
+            val petId = backStackEntry.arguments?.getString("petId")
+            ShelterPetFormScreen(
+                petId = petId,
+                onBack = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
+            )
+        }
+
+        composable(NavRoute.ShelterApplications.route) {
+            ShelterApplicationsScreen(
+                onOpenApplication = { appId ->
+                    navController.navigate(NavRoute.ShelterApplicationDetail.createRoute(appId))
+                }
+            )
+        }
+
+        composable(
+            route = NavRoute.ShelterApplicationDetail.route,
+            arguments = listOf(navArgument("appId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val appId = backStackEntry.arguments?.getString("appId") ?: ""
+            ShelterApplicationDetailScreen(
+                appId = appId,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(NavRoute.ShelterNotifications.route) {
+            ShelterNotificationsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenApplication = { appId ->
+                    navController.navigate(NavRoute.ShelterApplicationDetail.createRoute(appId))
+                }
+            )
+        }
+
+        composable(NavRoute.ShelterProfile.route) {
+            ShelterProfileScreen(onLogout = onShelterLogout)
         }
     }
 }

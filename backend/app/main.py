@@ -9,16 +9,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import ALLOWED_ORIGINS
 from app.database.indexes import setup_standard_indexes, setup_atlas_vector_search_index
 from app.database.connection import close_clients, get_async_db
+from app.services.storage import ensure_upload_dir
 from app.routers import (
     chat_router,
     pets_router,
     matches_router,
     adoptions_router,
     users_router,
+    meta_router,
+    shelters_router,
+    notifications_router,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -67,6 +72,12 @@ app.include_router(pets_router, prefix="/api/v1")
 app.include_router(matches_router, prefix="/api/v1")
 app.include_router(adoptions_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
+app.include_router(meta_router, prefix="/api/v1")
+app.include_router(shelters_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+
+# Serve uploaded pet photos in dev
+app.mount("/uploads", StaticFiles(directory=str(ensure_upload_dir())), name="uploads")
 
 
 @app.get("/health", tags=["Health"])

@@ -3,37 +3,40 @@ package com.pawfect.app.ui.navigation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
-import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 
-/**
- * Root Scaffold with persistent NavigationBar.
- * [FROM MARKDOWN: Step 4.2]
- * "Implement a root Scaffold with a persistent NavigationBar supporting 3 primary destinations:
- * Home (Onboarding/Dashboard), Matches, and Profile."
- */
 @Composable
 fun PawFectMainScaffold(
     isAuthenticated: Boolean,
-    onLogout: () -> Unit
+    isShelterAuthenticated: Boolean = false,
+    onLogout: () -> Unit,
+    onShelterLogout: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     var authenticated by remember { mutableStateOf(isAuthenticated) }
+    var shelterAuthenticated by remember { mutableStateOf(isShelterAuthenticated) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val bottomNavItems = listOf(
+    val adopterBottomNavItems = listOf(
         BottomNavItem.Home,
         BottomNavItem.Chat,
         BottomNavItem.Matches,
         BottomNavItem.Profile
     )
 
-    // Show bottom bar on primary tabs
-    val showBottomBar = authenticated && currentRoute in listOf(
+    val shelterBottomNavItems = listOf(
+        BottomNavItem.ShelterDashboard,
+        BottomNavItem.ShelterPets,
+        BottomNavItem.ShelterApplications,
+        BottomNavItem.ShelterProfile
+    )
+
+    val showAdopterBottomBar = authenticated && currentRoute in listOf(
         NavRoute.Home.route,
         NavRoute.Chat.route,
         NavRoute.Matches.route,
@@ -41,9 +44,24 @@ fun PawFectMainScaffold(
         NavRoute.Profile.route
     )
 
+    val showShelterBottomBar = shelterAuthenticated && currentRoute in listOf(
+        NavRoute.ShelterDashboard.route,
+        NavRoute.ShelterPets.route,
+        NavRoute.ShelterApplications.route,
+        NavRoute.ShelterProfile.route
+    )
+
+    val startDest = when {
+        isShelterAuthenticated -> NavRoute.ShelterDashboard.route
+        isAuthenticated -> NavRoute.Home.route
+        else -> NavRoute.Welcome.route
+    }
+
     Scaffold(
         bottomBar = {
-            if (showBottomBar) {
+            if (showAdopterBottomBar || showShelterBottomBar) {
+                val items = if (showShelterBottomBar) shelterBottomNavItems else adopterBottomNavItems
+                val rootRoute = if (showShelterBottomBar) NavRoute.ShelterDashboard.route else NavRoute.Home.route
                 Column {
                     HorizontalDivider(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
@@ -53,7 +71,7 @@ fun PawFectMainScaffold(
                         contentColor = MaterialTheme.colorScheme.onSurface,
                         tonalElevation = 0.dp
                     ) {
-                        bottomNavItems.forEach { item ->
+                        items.forEach { item ->
                             val selected = currentRoute == item.route ||
                                 (item == BottomNavItem.Matches && currentRoute == NavRoute.SavedPets.route)
                             NavigationBarItem(
@@ -61,9 +79,7 @@ fun PawFectMainScaffold(
                                 onClick = {
                                     if (currentRoute != item.route) {
                                         navController.navigate(item.route) {
-                                            popUpTo(NavRoute.Home.route) {
-                                                inclusive = false
-                                            }
+                                            popUpTo(rootRoute) { inclusive = false }
                                             launchSingleTop = true
                                         }
                                     }
@@ -92,11 +108,20 @@ fun PawFectMainScaffold(
         PawFectNavGraph(
             navController = navController,
             modifier = Modifier.padding(innerPadding),
-            startDestination = if (isAuthenticated) NavRoute.Home.route else NavRoute.Welcome.route,
+            startDestination = startDest,
             onAuthenticated = { authenticated = true },
+            onShelterAuthenticated = { shelterAuthenticated = true },
             onLogout = {
                 onLogout()
                 authenticated = false
+                navController.navigate(NavRoute.Welcome.route) {
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    launchSingleTop = true
+                }
+            },
+            onShelterLogout = {
+                onShelterLogout()
+                shelterAuthenticated = false
                 navController.navigate(NavRoute.Welcome.route) {
                     popUpTo(navController.graph.startDestinationId) { inclusive = true }
                     launchSingleTop = true

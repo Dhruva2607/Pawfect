@@ -62,13 +62,25 @@ data class AdoptionApplyRequestDto(
 )
 
 @Serializable
+data class StageHistoryEntryDto(
+    val stage: String,
+    val timestamp: String,
+    val note: String? = null
+)
+
+@Serializable
 data class AdoptionStatusResponseDto(
     @SerialName("application_id") val applicationId: String,
     @SerialName("user_id") val userId: String,
     @SerialName("pet_id") val petId: String,
     @SerialName("pet_name") val petName: String? = null,
+    @SerialName("shelter_id") val shelterId: String? = null,
     @SerialName("stage_status") val stageStatus: String,
     @SerialName("applicant_name") val applicantName: String,
+    @SerialName("shelter_note") val shelterNote: String? = null,
+    @SerialName("compatibility_score") val compatibilityScore: Int? = null,
+    @SerialName("compatibility_reasoning") val compatibilityReasoning: String? = null,
+    @SerialName("stage_history") val stageHistory: List<StageHistoryEntryDto> = emptyList(),
     @SerialName("submitted_at") val submittedAt: String,
     @SerialName("updated_at") val updatedAt: String
 )
