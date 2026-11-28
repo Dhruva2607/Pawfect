@@ -1158,8 +1158,14 @@ def write_to_db(db: Any, data: Dict[str, Any], *, skip_embeddings: bool = False,
     setup_standard_indexes(db)
     setup_atlas_vector_search_index(db)
 
-    # Generate embeddings for pets if not skipping
+    # Generate embeddings for pets if not skipping (reusing any valid 768-dim vector already in DB)
+    pets_col = db["pets"]
+    has_find_one = hasattr(pets_col, "find_one")
     for p in data["all_pets"]:
+        if has_find_one and not (p.get("embedding") and len(p["embedding"]) == VECTOR_DIMENSION):
+            existing = pets_col.find_one({"_id": p["_id"]}, {"embedding": 1})
+            if existing and existing.get("embedding") and len(existing["embedding"]) == VECTOR_DIMENSION:
+                p["embedding"] = existing["embedding"]
         has_valid_emb = bool(p.get("embedding") and len(p["embedding"]) == VECTOR_DIMENSION)
         if has_valid_emb:
             p["embedding_pending"] = False
